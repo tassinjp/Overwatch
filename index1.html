@@ -6,18 +6,42 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>SA Map</title>
-
   <script>
     window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/";
   </script>
-
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
-
   <style>
-    html, body, #cesiumContainer {
-      width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000;
-    }
-    .cesium-widget-credits { display: none !important; }
-    #err {
-      position: fixed; left: 0; right: 0; bottom: 0
+    html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
+    .cesium-widget-credits { display:none !important; }
+    #err { position:fixed; left:0; right:0; bottom:0; z-index:9999; font:13px monospace; color:#fff; background:#b00020; padding:10px 12px; white-space:pre-wrap; display:none; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="err"></div>
+  <script>
+    function showErr(msg){var e=document.getElementById("err");e.textContent="ERROR: "+msg;e.style.display="block";}
+    window.onerror=function(m,src,line,col,error){showErr((error&&error.message)?error.message:m);};
+    try {
+      Cesium.Ion.defaultAccessToken = "";
+      const viewer = new Cesium.Viewer("cesiumContainer", {
+        baseLayer: new Cesium.ImageryLayer(
+          new Cesium.UrlTemplateImageryProvider({
+            url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            maximumLevel: 19,
+            credit: "Esri"
+          })
+        ),
+        baseLayerPicker: false, geocoder: false, homeButton: false,
+        sceneModePicker: true, navigationHelpButton: false,
+        animation: false, timeline: false, fullscreenButton: false
+      });
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(-98.0, 39.0, 6000000),
+        duration: 0
+      });
+    } catch (e) { showErr(e.message); }
+  </script>
+</body>
+</html>
