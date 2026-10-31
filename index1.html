@@ -7,12 +7,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>SA Map</title>
 
-  <!-- Tell Cesium where its Workers/Assets live, BEFORE the library loads -->
   <script>
     window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/";
   </script>
 
-  <!-- CesiumJS from the official CDN (ships the full build: Workers, Assets, Widgets) -->
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
 
@@ -21,7 +19,6 @@
       width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000;
     }
     .cesium-widget-credits { display: none !important; }
-    /* On-screen error banner so you can debug on the phone */
     #err {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999;
       font: 13px -apple-system, monospace; color: #fff; background: #b00020;
@@ -34,7 +31,6 @@
   <div id="err"></div>
 
   <script>
-    // Show any real error on screen instead of a silent black globe.
     function showErr(msg) {
       var e = document.getElementById("err");
       e.textContent = "ERROR: " + msg;
@@ -45,12 +41,11 @@
     };
 
     try {
-      // No Cesium Ion account or token needed — we supply our own map tiles.
       Cesium.Ion.defaultAccessToken = "";
 
       const viewer = new Cesium.Viewer("cesiumContainer", {
-        baseLayer: Cesium.ImageryLayer.fromProviderAsync(
-          Cesium.OpenStreetMapImageryProvider.fromUrl("https://tile.openstreetmap.org/")
+        baseLayer: new Cesium.ImageryLayer(
+          new Cesium.OpenStreetMapImageryProvider({ url: "https://tile.openstreetmap.org/" })
         ),
         baseLayerPicker: false,
         geocoder: false,
@@ -62,7 +57,6 @@
         fullscreenButton: false
       });
 
-      // Point the camera at the continental US.
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(-98.0, 39.0, 6000000),
         duration: 0
