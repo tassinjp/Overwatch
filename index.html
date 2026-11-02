@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Overwatch</title>
+  <script>
+    window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/";
+  </script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
+  <style>
+    html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
+    .cesium-widget-credits { display:none !important; }
+    #err { position:fixed; left:0; right:0; bottom:0; z-index:9999; font:13px monospace; color:#fff; background:#b00020; padding:10px 12px; white-space:pre-wrap; display:none; }
+    #panel { position:fixed; top:8px; left:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff; background:rgba(0,0,0,0.6); padding:8px 10px; border-radius:8px; max-width:66vw; }
+    #panel select { width:100%; margin-top:6px; font-size:13px; padding:4px; border-radius:5px; background:#111; color:#fff; border:1px solid #444; }
+    #panel label { display:inline-block; margin-top:6px; margin-right:10px; }
+    #hud { font-weight:600; }
+    .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+    #info { position:fixed; right:8px; bottom:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff;
+            background:rgba(0,0,0,0.78); padding:10px 12px; border-radius:8px; max-width:70vw; display:none; }
+    #info b { font-size:14px; }
+    #info .row { margin-top:3px; color:#cfe; }
+    #info .close { float:right; margin-left:12px; color:#9ad; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="panel">
+    <div id="hud">Loading…</div>
+    <select id="country"><option value="__ALL__">All countries</option></select>
+    <div>
+      <label><input type="checkbox" id="chkAir" checked> <span class="dot" style="background:#ffdd00"></span>Air</label>
+      <label><input type="checkbox" id="chkGnd" checked> <span class="dot" style="background:#ff9800"></span>Ground</label>
+      <label><input type="checkbox" id="chkSurf" checked> <span class="dot" style="background:#00e5ff"></span>Surface</label>
+      <label><input type="checkbox" id="chkTrail" checked> Trails</label>
+    </div>
+  </div>
+  <div id="info"></div>
+  <div id="err"></div>
+  <script>
+    const WORKER = "https://overwatch.tassinjp.workers.dev";
+
+    function showErr(msg){var e=document.getElementById("err");e.textContent="ERROR: "+msg;e.style.display="block";}
+    function hideErr(){document.getElementById("err").style.display="none";}
+    window.onerror=function(m,src,line,col,error){showErr((error&&error.message)?error.message:m);};
+
+    Cesium.Ion.defaultAccessToken = "";
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      baseLayer: new Cesium.ImageryLayer(
+        new Cesium.UrlTemplateImageryProvider({
+          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          maximumLevel: 19, credit: "Esri"
+        })
+      ),
+      baseLayerPicker: false, geocoder: false, homeButton: false,
+      sceneModePicker: true, navigationHelpButton: false,
+      animation: false, timeline: false, fullscreenButton: false,
+      infoBox: false, selectionIndicator: false
+    });
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(-70.0, 30.0, 16000000), duration: 0 });
+
+    // ---- Icon set (white silhouettes, pointing north; tinted by status) ----
+    function svg(inner){ return "data:image/svg+xml;utf8," + encodeURIComponent(
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" + inner + "</svg>"); }
+    const P = {
+      generic: svg("<path fill='white' d='M12 1 L13.4 9 L22 13.5 L22 15.5 L13.4 12.6 L12.7 19.5 L15.5 21.5 L15.5 22.8 L12 21.2 L8.5 22.8 L8.5 21.5 L11.3 19.5 L10.6 12.6 L2 15.5 L2 13.5 L10.6 9 Z'/>"),
+      cargo: svg("<path fill='white' d='M12 2 L13 9 L23 14 L23 15.6 L13 13 L12.6 19 L15 21 L15 22.2 L12 21 L9 22.2 L9 21 L11.4 19 L11 13 L1 15.6 L1 14 L11 9 Z'/>"),
+      tanker: svg("<path fill='white' d='M12 1 L13.4 9 L22 13.5 L22 15.5 L13.4 12.6 L12.7 19.5 L15.5 21.5 L15.5 22.8 L12 21.2 L8.5 22.8 L8.5 21.5 L11.3 19.5 L10.6 12.6 L2 15.5 L2 13.5 L10.6 9 Z'/><line x1='12' y1='21' x2='12' y2='23.6' stroke='white' stroke-width='1.6'/>"),
+      fighter: svg("<path fill='white' d='M12 2 L14 14 L20 20 L12 17 L4 20 L10 14 Z'/>"),
+      stealth: svg("<path fill='white' d='M12 4 L22 19 L12 15 L2 19 Z'/>"),
+      bomber: svg("<path fill='white' d='M12 2 L13 11 L23 20 L23 21 L12 16 L1 21 L1 20 L11 11 Z'/>"),
+      recon: svg("<path fill='white' d='M12 2 L13.4 9 L22 13.5 L22 15.5 L13.4 12.6 L12.7 19.5 L15.5 21.5 L15.5 22.8 L12 21.2 L8.5 22.8 L8.5 21.5 L11.3 19.5 L10.6 12.6 L2 15.5 L2 13.5 L10.6 9 Z'/><circle cx='12' cy='11' r='2.3' fill='none' stroke='white' stroke-width='1.3'/>"),
+      helo: svg("<g stroke='white' stroke-width='1.5' fill='none'><line x1='3' y1='7' x2='21' y2='17'/><line x1='21' y1='7' x2='3' y2='17'/></g><rect x='10' y='8' width='4' height='9' rx='2' fill='white'/><line x1='12' y1='17' x2='12' y2='22.5' stroke='white' stroke-width='1.5'/>"),
+      trainer: svg("<path fill='white' d='M12 5 L13 10 L19 13 L19 14.5 L13 12.5 L12.7 18 L15 19.5 L15 20.5 L12 19.3 L9 20.5 L9 19.5 L11.3 18 L11 12.5 L5 14.5 L5 13 L11 10 Z'/>")
+    };
+    const SET = {
+      tanker:  ["K35R","KC46","KC10","KC2","KC30","A332","KC3","VC10","A310"],
+      recon:   ["R135","RC135","E3","E3TF","E3CF","E6","E7","E8","P8","P3","P1","U2","RQ4","GLF5","GL5T","RC12","E767"],
+      bomber:  ["B1","B52","B21"],
+      stealth: ["B2"],
+      fighter: ["EUFI","RFAL","F15","F16","F18","FA18","F22","F35","F14","TOR","GR4","JAS39","A10","AV8B","MIG29","SU27","SU30","J10","JH7","HAWK"],
+      helo:    ["EC35","EC45","H60","A139","V22","EC75","H47","CH47","H64","H160","UH1","MI8","MI17","NH90","AS32","PUMA","EC30","A109","H500","B06"],
+      cargo:   ["C130","C30J","C17","C5","C5M","C295","C27J","C160","A400","AN32","AN12","AN26","IL76","C2","D228","C40","C32","B744","B742","B752","B762","B77W","B737","A320","A330","AT76","F50","C12","DHC6","DH8"],
+      trainer: ["PC21","PC7","TEX2","T6","T38","CT4","DA40","PC9","T45","G120","SF26"]
+    };
+    const TYPE2CAT = {};
+    for (const cat in SET) for (const t of SET[cat]) TYPE2CAT[t] = cat;
+
+    function classify(a){
+      const t = (a.t || "").toUpperCase();
+      if (TYPE2CAT[t]) return TYPE2CAT[t];
+      if (a.category && String(a.category).toUpperCase() === "A7") return "helo"; // rotorcraft
+      return "generic";
+    }
+
+    function flagEmoji(cc){
+      if (!cc || cc.length !== 2) return "";
+      const A = 0x1F1E6;
+      return String.fromCodePoint(A + cc.charCodeAt(0) - 65) + String.fromCodePoint(A + cc.charCodeAt(1) - 65);
+    }
+    const ccByCountry = new Map();
+    const AIR_COLOR = Cesium.Color.fromCssColorString("#ffdd00");
+    const GND_COLOR = Cesium.Color.fromCssColorString("#ff9800");
+    const SURF_COLOR = Cesium.Color.fromCssColorString("#00e5ff");
+    const assets = new Map();
+    let countryList = [];
+    const labelFade = new Cesium.NearFarScalar(2.0e6, 1.0, 1.2e7, 0.0);
+
+    function isSurface(a){ return a.category && String(a.category)[0] === "C"; }
+
+    function currentCartesian(rec){
+      const spd = (rec.gs || 0) * 0.514444;
+      const dt = (Date.now() - rec.t0) / 1000;
+      const dist = spd * dt;
+      if (dist < 1) return Cesium.Cartesian3.fromDegrees(rec.lon0, rec.lat0, rec.altM);
+      const R = 6378137;
+      const brng = Cesium.Math.toRadians(rec.track || 0);
+      const lat1 = Cesium.Math.toRadians(rec.lat0), lon1 = Cesium.Math.toRadians(rec.lon0);
+      const dR = dist / R;
+      const lat2 = Math.asin(Math.sin(lat1)*Math.cos(dR) + Math.cos(lat1)*Math.sin(dR)*Math.cos(brng));
+      const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(dR)*Math.cos(lat1),
+                                     Math.cos(dR) - Math.sin(lat1)*Math.sin(lat2));
+      return Cesium.Cartesian3.fromRadians(lon2, lat2, rec.altM);
+    }
+
+    async function updateAircraft() {
+      try {
+        const res = await fetch(WORKER + "/air", { cache: "no-store" });
+        const data = await res.json();
+        const list = data.ac || [];
+        const seen = new Set();
+        const countries = new Set();
+
+        for (const a of list) {
+          let lat = (typeof a.lat === "number") ? a.lat : (a.lastPosition && a.lastPosition.lat);
+          let lon = (typeof a.lon === "number") ? a.lon : (a.lastPosition && a.lastPosition.lon);
+          if (typeof lat !== "number" || typeof lon !== "number") continue;
+
+          const hex = a.hex;
+          seen.add(hex);
+          const onGround = (a.alt_baro === "ground");
+          const kind = isSurface(a) ? "surface" : (onGround ? "ground" : "air");
+          const cat = isSurface(a) ? "surface" : classify(a);
+          const ctry = a.ctry || "Unknown";
+          const cc = a.cc || "";
+          if (cc) ccByCountry.set(ctry, cc);
+          countries.add(ctry);
+
+          const altFt = (a.alt_baro === "ground" || a.alt_baro == null) ? 0 : a.alt_baro;
+          const altM = Math.max(altFt * 0.3048, 60);
+          const call = (a.flight || "").trim() || hex.toUpperCase();
+          const typeLbl = a.t ? ("  " + a.t) : "";
+          const flag = flagEmoji(cc);
+          const text = (flag ? flag + " " : "") + call + typeLbl + (onGround ? "  (GND)" : "");
+
+          let rec = assets.get(hex);
+          if (!rec || rec.kind !== kind || rec.cat !== cat) {
+            if (rec) { viewer.entities.remove(rec.entity); if (rec.trail) viewer.entities.remove(rec.trail); }
+            rec = { ctry, kind, cat, lat0:lat, lon0:lon, altM, track:a.track||0,
+                    gs:onGround?0:(a.gs||0), t0:Date.now(), hist:[], info:{} };
+            const posProp = new Cesium.CallbackProperty(() => currentCartesian(rec), false);
+            const mkLabel = (dy) => ({ text, font:"12px sans-serif", fillColor:Cesium.Color.WHITE,
+              style:Cesium.LabelStyle.FILL_AND_OUTLINE, outlineColor:Cesium.Color.BLACK, outlineWidth:3,
+              pixelOffset:new Cesium.Cartesian2(0,dy), scale:0.7, translucencyByDistance:labelFade });
+
+            if (kind === "surface") {
+              rec.entity = viewer.entities.add({ position: posProp,
+                point: { pixelSize:6, color:SURF_COLOR, outlineColor:Cesium.Color.BLACK, outlineWidth:1 },
+                label: mkLabel(-12) });
+            } else {
+              const tint = (kind === "ground") ? GND_COLOR : AIR_COLOR;
+              rec.entity = viewer.entities.add({ position: posProp,
+                billboard: { image: P[cat] || P.generic, scale:0.9, color: tint,
+                  rotation: new Cesium.CallbackProperty(() => Cesium.Math.toRadians(-(rec.track||0)), false),
+                  alignedAxis: Cesium.Cartesian3.ZERO },
+                label: mkLabel(-16) });
+              if (kind === "air") {
+                rec.trail = viewer.entities.add({ polyline: {
+                  positions: new Cesium.CallbackProperty(() => rec.hist, false),
+                  width: 1.5, material: AIR_COLOR.withAlpha(0.5) } });
+              }
+            }
+            rec.entity._hex = hex;
+            if (rec.trail) rec.trail._hex = hex;
+            assets.set(hex, rec);
+          } else {
+            rec.ctry = ctry;
+            rec.lat0 = lat; rec.lon0 = lon; rec.altM = altM;
+            rec.track = a.track || rec.track; rec.gs = onGround ? 0 : (a.gs || 0); rec.t0 = Date.now();
+            rec.entity.label.text = text;
+          }
+          rec.info = { call, type:(a.t||"—"), cat, ctry, altFt, gs:Math.round(a.gs||0),
+                       track:Math.round(a.track||0), hex:hex.toUpperCase(), squawk:a.squawk||"—", onGround, cc };
+          if (kind === "air") { rec.hist.push(Cesium.Cartesian3.fromDegrees(lon, lat, altM));
+                                if (rec.hist.length > 12) rec.hist.shift(); }
+        }
+
+        for (const [hex, rec] of assets) {
+          if (!seen.has(hex)) { viewer.entities.remove(rec.entity);
+            if (rec.trail) viewer.entities.remove(rec.trail); assets.delete(hex); }
+        }
+
+        rebuildCountryDropdown(countries);
+        applyFilter();
+        hideErr();
+      } catch (err) { showErr("aircraft: " + err.message); }
+    }
+
+    function rebuildCountryDropdown(countrySet) {
+      const sorted = Array.from(countrySet).sort();
+      if (sorted.length === countryList.length && sorted.every((c, i) => c === countryList[i])) return;
+      countryList = sorted;
+      const sel = document.getElementById("country");
+      const current = sel.value;
+      sel.innerHTML = '<option value="__ALL__">All countries</option>';
+      for (const c of sorted) { const o = document.createElement("option"); o.value = c; const f = flagEmoji(ccByCountry.get(c)||""); o.textContent = (f ? f + " " : "") + c; sel.appendChild(o); }
+      sel.value = sorted.includes(current) || current === "__ALL__" ? current : "__ALL__";
+    }
+
+    function applyFilter() {
+      const sel = document.getElementById("country").value;
+      const showAir = document.getElementById("chkAir").checked;
+      const showGnd = document.getElementById("chkGnd").checked;
+      const showSurf = document.getElementById("chkSurf").checked;
+      const showTrail = document.getElementById("chkTrail").checked;
+      let air = 0, gnd = 0, surf = 0, shown = 0;
+      for (const rec of assets.values()) {
+        let kindOk;
+        if (rec.kind === "ground") kindOk = showGnd;
+        else if (rec.kind === "surface") kindOk = showSurf;
+        else kindOk = showAir;
+        const ctryOk = sel === "__ALL__" || rec.ctry === sel;
+        const vis = kindOk && ctryOk;
+        rec.entity.show = vis;
+        if (rec.trail) rec.trail.show = vis && showTrail;
+        if (rec.kind === "ground") gnd++; else if (rec.kind === "surface") surf++; else air++;
+        if (vis) shown++;
+      }
+      document.getElementById("hud").textContent =
+        "Air " + air + " · Gnd " + gnd + " · Surf " + surf + " · shown " + shown;
+    }
+
+    const infoDiv = document.getElementById("info");
+    function showInfo(rec){
+      const i = rec.info;
+      infoDiv.innerHTML =
+        '<span class="close" onclick="document.getElementById(\'info\').style.display=\'none\'">close</span>' +
+        '<b>' + i.call + '</b>' + (i.onGround ? ' (on ground)' : '') + '<br>' +
+        '<div class="row">' + (flagEmoji(i.cc) ? flagEmoji(i.cc)+' ' : '') + i.ctry + ' · ' + i.type + ' · ' + i.cat + '</div>' +
+        '<div class="row">Alt ' + (i.altFt ? i.altFt.toLocaleString() + ' ft' : 'ground') +
+        ' · ' + i.gs + ' kt · hdg ' + i.track + '°</div>' +
+        '<div class="row">Hex ' + i.hex + ' · Squawk ' + i.squawk + '</div>';
+      infoDiv.style.display = "block";
+    }
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((click) => {
+      const picked = viewer.scene.pick(click.position);
+      if (picked && picked.id && picked.id._hex) { const rec = assets.get(picked.id._hex); if (rec) showInfo(rec); }
+      else { infoDiv.style.display = "none"; }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    document.getElementById("country").addEventListener("change", applyFilter);
+    document.getElementById("chkAir").addEventListener("change", applyFilter);
+    document.getElementById("chkGnd").addEventListener("change", applyFilter);
+    document.getElementById("chkSurf").addEventListener("change", applyFilter);
+    document.getElementById("chkTrail").addEventListener("change", applyFilter);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) updateAircraft(); });
+
+    updateAircraft();
+    setInterval(updateAircraft, 15000);
+  </script>
+</body>
+</html>
