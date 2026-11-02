@@ -6,22 +6,21 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Overwatch</title>
-  <script>
-    window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/";
-  </script>
+  <script>window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/";</script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
   <style>
     html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
     .cesium-widget-credits { display:none !important; }
     #err { position:fixed; left:0; right:0; bottom:0; z-index:9999; font:13px monospace; color:#fff; background:#b00020; padding:10px 12px; white-space:pre-wrap; display:none; }
-    #panel { position:fixed; top:8px; left:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff; background:rgba(0,0,0,0.6); padding:8px 10px; border-radius:8px; max-width:66vw; }
+    #panel { position:fixed; top:8px; left:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff; background:rgba(0,0,0,0.62); padding:8px 10px; border-radius:8px; max-width:66vw; }
     #panel select { width:100%; margin-top:6px; font-size:13px; padding:4px; border-radius:5px; background:#111; color:#fff; border:1px solid #444; }
     #panel label { display:inline-block; margin-top:6px; margin-right:10px; }
     #hud { font-weight:600; }
     .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
-    #info { position:fixed; right:8px; bottom:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff;
-            background:rgba(0,0,0,0.78); padding:10px 12px; border-radius:8px; max-width:70vw; display:none; }
+    #btns { position:fixed; right:8px; top:8px; z-index:9998; display:flex; flex-direction:column; gap:8px; }
+    #btns button { width:42px; height:42px; border-radius:21px; border:none; background:rgba(0,0,0,0.6); color:#fff; font-size:18px; }
+    #info { position:fixed; right:8px; bottom:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff; background:rgba(0,0,0,0.8); padding:10px 12px; border-radius:8px; max-width:72vw; display:none; }
     #info b { font-size:14px; }
     #info .row { margin-top:3px; color:#cfe; }
     #info .close { float:right; margin-left:12px; color:#9ad; }
@@ -33,16 +32,21 @@
     <div id="hud">Loading…</div>
     <select id="country"><option value="__ALL__">All countries</option></select>
     <div>
-      <label><input type="checkbox" id="chkAir" checked> <span class="dot" style="background:#ffdd00"></span>Air</label>
-      <label><input type="checkbox" id="chkGnd" checked> <span class="dot" style="background:#ff9800"></span>Ground</label>
-      <label><input type="checkbox" id="chkSurf" checked> <span class="dot" style="background:#00e5ff"></span>Surface</label>
+      <label><input type="checkbox" id="chkAir" checked> Air</label>
+      <label><input type="checkbox" id="chkGnd" checked> Ground</label>
+      <label><input type="checkbox" id="chkSurf" checked> Surface</label>
       <label><input type="checkbox" id="chkTrail" checked> Trails</label>
     </div>
+  </div>
+  <div id="btns">
+    <button id="btnLoc" title="My location">📍</button>
+    <button id="btnHome" title="Whole globe">🌐</button>
   </div>
   <div id="info"></div>
   <div id="err"></div>
   <script>
     const WORKER = "https://overwatch.tassinjp.workers.dev";
+    const RANGES_URL = "ranges.json"; // same-origin on GitHub Pages
 
     function showErr(msg){var e=document.getElementById("err");e.textContent="ERROR: "+msg;e.style.display="block";}
     function hideErr(){document.getElementById("err").style.display="none";}
@@ -50,20 +54,17 @@
 
     Cesium.Ion.defaultAccessToken = "";
     const viewer = new Cesium.Viewer("cesiumContainer", {
-      baseLayer: new Cesium.ImageryLayer(
-        new Cesium.UrlTemplateImageryProvider({
-          url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          maximumLevel: 19, credit: "Esri"
-        })
-      ),
-      baseLayerPicker: false, geocoder: false, homeButton: false,
-      sceneModePicker: true, navigationHelpButton: false,
-      animation: false, timeline: false, fullscreenButton: false,
-      infoBox: false, selectionIndicator: false
+      baseLayer: new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        maximumLevel: 19, credit: "Esri" })),
+      baseLayerPicker:false, geocoder:false, homeButton:false, sceneModePicker:true,
+      navigationHelpButton:false, animation:false, timeline:false, fullscreenButton:false,
+      infoBox:false, selectionIndicator:false
     });
-    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(-70.0, 30.0, 16000000), duration: 0 });
+    const HOME = Cesium.Cartesian3.fromDegrees(-70.0, 30.0, 16000000);
+    viewer.camera.flyTo({ destination: HOME, duration: 0 });
 
-    // ---- Icon set (white silhouettes, pointing north; tinted by status) ----
+    // ---- class icons (white silhouettes, tinted per-country) ----
     function svg(inner){ return "data:image/svg+xml;utf8," + encodeURIComponent(
       "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" + inner + "</svg>"); }
     const P = {
@@ -78,54 +79,74 @@
       trainer: svg("<path fill='white' d='M12 5 L13 10 L19 13 L19 14.5 L13 12.5 L12.7 18 L15 19.5 L15 20.5 L12 19.3 L9 20.5 L9 19.5 L11.3 18 L11 12.5 L5 14.5 L5 13 L11 10 Z'/>")
     };
     const SET = {
-      tanker:  ["K35R","KC46","KC10","KC2","KC30","A332","KC3","VC10","A310"],
-      recon:   ["R135","RC135","E3","E3TF","E3CF","E6","E7","E8","P8","P3","P1","U2","RQ4","GLF5","GL5T","RC12","E767"],
-      bomber:  ["B1","B52","B21"],
-      stealth: ["B2"],
-      fighter: ["EUFI","RFAL","F15","F16","F18","FA18","F22","F35","F14","TOR","GR4","JAS39","A10","AV8B","MIG29","SU27","SU30","J10","JH7","HAWK"],
-      helo:    ["EC35","EC45","H60","A139","V22","EC75","H47","CH47","H64","H160","UH1","MI8","MI17","NH90","AS32","PUMA","EC30","A109","H500","B06"],
-      cargo:   ["C130","C30J","C17","C5","C5M","C295","C27J","C160","A400","AN32","AN12","AN26","IL76","C2","D228","C40","C32","B744","B742","B752","B762","B77W","B737","A320","A330","AT76","F50","C12","DHC6","DH8"],
-      trainer: ["PC21","PC7","TEX2","T6","T38","CT4","DA40","PC9","T45","G120","SF26"]
+      tanker:["K35R","KC46","KC10","KC2","KC30","A332","KC3","VC10","A310"],
+      recon:["R135","RC135","E3","E3TF","E3CF","E6","E7","E8","P8","P3","P1","U2","RQ4","GLF5","GL5T","RC12","E767"],
+      bomber:["B1","B52","B21"], stealth:["B2"],
+      fighter:["EUFI","RFAL","F15","F16","F18","FA18","F22","F35","F14","TOR","GR4","JAS39","A10","AV8B","MIG29","SU27","SU30","J10","JH7","HAWK"],
+      helo:["EC35","EC45","H60","A139","V22","EC75","H47","CH47","H64","H160","UH1","MI8","MI17","NH90","AS32","PUMA","EC30","A109","H500","B06"],
+      cargo:["C130","C30J","C17","C5","C5M","C295","C27J","C160","A400","AN32","AN12","AN26","IL76","C2","D228","C40","C32","B744","B742","B752","B762","B77W","B737","A320","A330","AT76","F50","C12","DHC6","DH8"],
+      trainer:["PC21","PC7","TEX2","T6","T38","CT4","DA40","PC9","T45","G120","SF26"]
     };
-    const TYPE2CAT = {};
-    for (const cat in SET) for (const t of SET[cat]) TYPE2CAT[t] = cat;
-
-    function classify(a){
-      const t = (a.t || "").toUpperCase();
+    const TYPE2CAT = {}; for (const c in SET) for (const t of SET[c]) TYPE2CAT[t]=c;
+    function classify(a){ const t=(a.t||"").toUpperCase();
       if (TYPE2CAT[t]) return TYPE2CAT[t];
-      if (a.category && String(a.category).toUpperCase() === "A7") return "helo"; // rotorcraft
-      return "generic";
+      if (a.category && String(a.category).toUpperCase()==="A7") return "helo"; return "generic"; }
+
+    function flagEmoji(cc){ if(!cc||cc.length!==2) return "";
+      const A=0x1F1E6; return String.fromCodePoint(A+cc.charCodeAt(0)-65)+String.fromCodePoint(A+cc.charCodeAt(1)-65); }
+
+    function hslColor(h){ // h in [0,360) -> Cesium.Color, fixed s/l
+      const s=0.85, l=0.58; const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+      let r,g,b;
+      if(h<60){r=c;g=x;b=0;}else if(h<120){r=x;g=c;b=0;}else if(h<180){r=0;g=c;b=x;}
+      else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
+      return new Cesium.Color(r+m,g+m,b+m,1.0);
     }
 
-    function flagEmoji(cc){
-      if (!cc || cc.length !== 2) return "";
-      const A = 0x1F1E6;
-      return String.fromCodePoint(A + cc.charCodeAt(0) - 65) + String.fromCodePoint(A + cc.charCodeAt(1) - 65);
-    }
-    const ccByCountry = new Map();
-    const AIR_COLOR = Cesium.Color.fromCssColorString("#ffdd00");
-    const GND_COLOR = Cesium.Color.fromCssColorString("#ff9800");
+    // country table (loaded from ranges.json): name -> {cc,lat,lon,color}
+    const COUNTRY = new Map();
     const SURF_COLOR = Cesium.Color.fromCssColorString("#00e5ff");
-    const assets = new Map();
-    let countryList = [];
-    const labelFade = new Cesium.NearFarScalar(2.0e6, 1.0, 1.2e7, 0.0);
+    const GRAY = Cesium.Color.fromCssColorString("#cccccc");
+    function countryColor(name){ const r=COUNTRY.get(name); return (r&&r.color)||GRAY; }
 
-    function isSurface(a){ return a.category && String(a.category)[0] === "C"; }
+    async function loadCountries(){
+      try {
+        const r = await fetch(RANGES_URL, { cache:"force-cache" });
+        const rows = await r.json();  // [start,end,name,cc,lat,lon]
+        const uniq = new Map();
+        for (const row of rows){ const name=row[2];
+          if(!uniq.has(name)) uniq.set(name,{cc:row[3]||"",lat:row[4],lon:row[5]}); }
+        const names=[...uniq.keys()].sort();
+        names.forEach((name,i)=>{ const u=uniq.get(name);
+          COUNTRY.set(name,{cc:u.cc,lat:u.lat,lon:u.lon,color:hslColor((i*137.508)%360)}); });
+        // build full dropdown once
+        const sel=document.getElementById("country");
+        sel.innerHTML='<option value="__ALL__">All countries</option>';
+        for(const name of names){ if(name.startsWith("Unassigned")||name.startsWith("ICAO")) continue;
+          const o=document.createElement("option"); o.value=name;
+          const f=flagEmoji(uniq.get(name).cc); o.textContent=(f?f+" ":"")+name; sel.appendChild(o); }
+      } catch(e){ /* dropdown still works dynamically if this fails */ }
+    }
+
+    const assets = new Map();
+    const labelFade = new Cesium.NearFarScalar(2.0e6, 1.0, 1.4e7, 0.0);
+    function isSurface(a){ return a.category && String(a.category)[0]==="C"; }
 
     function currentCartesian(rec){
-      const spd = (rec.gs || 0) * 0.514444;
-      const dt = (Date.now() - rec.t0) / 1000;
-      const dist = spd * dt;
-      if (dist < 1) return Cesium.Cartesian3.fromDegrees(rec.lon0, rec.lat0, rec.altM);
-      const R = 6378137;
-      const brng = Cesium.Math.toRadians(rec.track || 0);
-      const lat1 = Cesium.Math.toRadians(rec.lat0), lon1 = Cesium.Math.toRadians(rec.lon0);
-      const dR = dist / R;
-      const lat2 = Math.asin(Math.sin(lat1)*Math.cos(dR) + Math.cos(lat1)*Math.sin(dR)*Math.cos(brng));
-      const lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(dR)*Math.cos(lat1),
-                                     Math.cos(dR) - Math.sin(lat1)*Math.sin(lat2));
-      return Cesium.Cartesian3.fromRadians(lon2, lat2, rec.altM);
+      const spd=(rec.gs||0)*0.514444, dt=(Date.now()-rec.t0)/1000, dist=spd*dt;
+      if(dist<1) return Cesium.Cartesian3.fromDegrees(rec.lon0,rec.lat0,rec.altM);
+      const R=6378137, brng=Cesium.Math.toRadians(rec.track||0);
+      const lat1=Cesium.Math.toRadians(rec.lat0), lon1=Cesium.Math.toRadians(rec.lon0), dR=dist/R;
+      const lat2=Math.asin(Math.sin(lat1)*Math.cos(dR)+Math.cos(lat1)*Math.sin(dR)*Math.cos(brng));
+      const lon2=lon1+Math.atan2(Math.sin(brng)*Math.sin(dR)*Math.cos(lat1),Math.cos(dR)-Math.sin(lat1)*Math.sin(lat2));
+      return Cesium.Cartesian3.fromRadians(lon2,lat2,rec.altM);
     }
+
+    function mkLabel(text,dy){ return { text, font:"bold 13px -apple-system,sans-serif", fillColor:Cesium.Color.WHITE,
+      showBackground:true, backgroundColor:new Cesium.Color(0,0,0,0.55), backgroundPadding:new Cesium.Cartesian2(5,3),
+      style:Cesium.LabelStyle.FILL, pixelOffset:new Cesium.Cartesian2(0,dy), scale:0.85,
+      translucencyByDistance:labelFade, disableDepthTestDistance:Number.POSITIVE_INFINITY,
+      horizontalOrigin:Cesium.HorizontalOrigin.LEFT }; }
 
     async function updateAircraft() {
       try {
@@ -133,145 +154,110 @@
         const data = await res.json();
         const list = data.ac || [];
         const seen = new Set();
-        const countries = new Set();
 
         for (const a of list) {
-          let lat = (typeof a.lat === "number") ? a.lat : (a.lastPosition && a.lastPosition.lat);
-          let lon = (typeof a.lon === "number") ? a.lon : (a.lastPosition && a.lastPosition.lon);
-          if (typeof lat !== "number" || typeof lon !== "number") continue;
+          let lat=(typeof a.lat==="number")?a.lat:(a.lastPosition&&a.lastPosition.lat);
+          let lon=(typeof a.lon==="number")?a.lon:(a.lastPosition&&a.lastPosition.lon);
+          if(typeof lat!=="number"||typeof lon!=="number") continue;
+          const hex=a.hex; seen.add(hex);
+          const onGround=(a.alt_baro==="ground");
+          const kind=isSurface(a)?"surface":(onGround?"ground":"air");
+          const cat=isSurface(a)?"surface":classify(a);
+          const ctry=a.ctry||"Unknown";
+          const col=countryColor(ctry);
+          const altFt=(a.alt_baro==="ground"||a.alt_baro==null)?0:a.alt_baro;
+          const altM=Math.max(altFt*0.3048,60);
+          const call=(a.flight||"").trim()||hex.toUpperCase();
+          const text=call+(a.t?("  "+a.t):"")+(onGround?"  (GND)":"");
 
-          const hex = a.hex;
-          seen.add(hex);
-          const onGround = (a.alt_baro === "ground");
-          const kind = isSurface(a) ? "surface" : (onGround ? "ground" : "air");
-          const cat = isSurface(a) ? "surface" : classify(a);
-          const ctry = a.ctry || "Unknown";
-          const cc = a.cc || "";
-          if (cc) ccByCountry.set(ctry, cc);
-          countries.add(ctry);
-
-          const altFt = (a.alt_baro === "ground" || a.alt_baro == null) ? 0 : a.alt_baro;
-          const altM = Math.max(altFt * 0.3048, 60);
-          const call = (a.flight || "").trim() || hex.toUpperCase();
-          const typeLbl = a.t ? ("  " + a.t) : "";
-          const flag = flagEmoji(cc);
-          const text = (flag ? flag + " " : "") + call + typeLbl + (onGround ? "  (GND)" : "");
-
-          let rec = assets.get(hex);
-          if (!rec || rec.kind !== kind || rec.cat !== cat) {
-            if (rec) { viewer.entities.remove(rec.entity); if (rec.trail) viewer.entities.remove(rec.trail); }
-            rec = { ctry, kind, cat, lat0:lat, lon0:lon, altM, track:a.track||0,
-                    gs:onGround?0:(a.gs||0), t0:Date.now(), hist:[], info:{} };
-            const posProp = new Cesium.CallbackProperty(() => currentCartesian(rec), false);
-            const mkLabel = (dy) => ({ text, font:"12px sans-serif", fillColor:Cesium.Color.WHITE,
-              style:Cesium.LabelStyle.FILL_AND_OUTLINE, outlineColor:Cesium.Color.BLACK, outlineWidth:3,
-              pixelOffset:new Cesium.Cartesian2(0,dy), scale:0.7, translucencyByDistance:labelFade });
-
-            if (kind === "surface") {
-              rec.entity = viewer.entities.add({ position: posProp,
-                point: { pixelSize:6, color:SURF_COLOR, outlineColor:Cesium.Color.BLACK, outlineWidth:1 },
-                label: mkLabel(-12) });
+          let rec=assets.get(hex);
+          if(!rec||rec.kind!==kind||rec.cat!==cat){
+            if(rec){viewer.entities.remove(rec.entity); if(rec.trail)viewer.entities.remove(rec.trail);}
+            rec={ctry,kind,cat,lat0:lat,lon0:lon,altM,track:a.track||0,gs:onGround?0:(a.gs||0),t0:Date.now(),hist:[],info:{}};
+            const posProp=new Cesium.CallbackProperty(()=>currentCartesian(rec),false);
+            if(kind==="surface"){
+              rec.entity=viewer.entities.add({position:posProp,
+                point:{pixelSize:7,color:SURF_COLOR,outlineColor:Cesium.Color.BLACK,outlineWidth:1},label:mkLabel(text,-13)});
             } else {
-              const tint = (kind === "ground") ? GND_COLOR : AIR_COLOR;
-              rec.entity = viewer.entities.add({ position: posProp,
-                billboard: { image: P[cat] || P.generic, scale:0.9, color: tint,
-                  rotation: new Cesium.CallbackProperty(() => Cesium.Math.toRadians(-(rec.track||0)), false),
-                  alignedAxis: Cesium.Cartesian3.ZERO },
-                label: mkLabel(-16) });
-              if (kind === "air") {
-                rec.trail = viewer.entities.add({ polyline: {
-                  positions: new Cesium.CallbackProperty(() => rec.hist, false),
-                  width: 1.5, material: AIR_COLOR.withAlpha(0.5) } });
-              }
+              rec.entity=viewer.entities.add({position:posProp,
+                billboard:{image:P[cat]||P.generic, scale:0.95, color:col,
+                  translucencyByDistance:new Cesium.NearFarScalar(2e6,(kind==="ground"?0.65:1.0),1.4e7,(kind==="ground"?0.45:0.85)),
+                  rotation:new Cesium.CallbackProperty(()=>Cesium.Math.toRadians(-(rec.track||0)),false),
+                  alignedAxis:Cesium.Cartesian3.ZERO},
+                label:mkLabel(text,-16)});
+              if(kind==="air"){ rec.trail=viewer.entities.add({polyline:{
+                positions:new Cesium.CallbackProperty(()=>rec.hist,false), width:1.6, material:col.withAlpha(0.55)}}); }
             }
-            rec.entity._hex = hex;
-            if (rec.trail) rec.trail._hex = hex;
-            assets.set(hex, rec);
+            rec.entity._hex=hex; if(rec.trail)rec.trail._hex=hex;
+            assets.set(hex,rec);
           } else {
-            rec.ctry = ctry;
-            rec.lat0 = lat; rec.lon0 = lon; rec.altM = altM;
-            rec.track = a.track || rec.track; rec.gs = onGround ? 0 : (a.gs || 0); rec.t0 = Date.now();
-            rec.entity.label.text = text;
+            rec.ctry=ctry; rec.lat0=lat; rec.lon0=lon; rec.altM=altM;
+            rec.track=a.track||rec.track; rec.gs=onGround?0:(a.gs||0); rec.t0=Date.now();
+            rec.entity.label.text=text;
           }
-          rec.info = { call, type:(a.t||"—"), cat, ctry, altFt, gs:Math.round(a.gs||0),
-                       track:Math.round(a.track||0), hex:hex.toUpperCase(), squawk:a.squawk||"—", onGround, cc };
-          if (kind === "air") { rec.hist.push(Cesium.Cartesian3.fromDegrees(lon, lat, altM));
-                                if (rec.hist.length > 12) rec.hist.shift(); }
+          const cc=(COUNTRY.get(ctry)||{}).cc||"";
+          rec.info={call,type:(a.t||"—"),cat,ctry,cc,altFt,gs:Math.round(a.gs||0),
+                    track:Math.round(a.track||0),hex:hex.toUpperCase(),squawk:a.squawk||"—",onGround,lat,lon};
+          if(kind==="air"){ rec.hist.push(Cesium.Cartesian3.fromDegrees(lon,lat,altM)); if(rec.hist.length>12)rec.hist.shift(); }
         }
-
-        for (const [hex, rec] of assets) {
-          if (!seen.has(hex)) { viewer.entities.remove(rec.entity);
-            if (rec.trail) viewer.entities.remove(rec.trail); assets.delete(hex); }
-        }
-
-        rebuildCountryDropdown(countries);
-        applyFilter();
-        hideErr();
-      } catch (err) { showErr("aircraft: " + err.message); }
-    }
-
-    function rebuildCountryDropdown(countrySet) {
-      const sorted = Array.from(countrySet).sort();
-      if (sorted.length === countryList.length && sorted.every((c, i) => c === countryList[i])) return;
-      countryList = sorted;
-      const sel = document.getElementById("country");
-      const current = sel.value;
-      sel.innerHTML = '<option value="__ALL__">All countries</option>';
-      for (const c of sorted) { const o = document.createElement("option"); o.value = c; const f = flagEmoji(ccByCountry.get(c)||""); o.textContent = (f ? f + " " : "") + c; sel.appendChild(o); }
-      sel.value = sorted.includes(current) || current === "__ALL__" ? current : "__ALL__";
+        for(const [hex,rec] of assets){ if(!seen.has(hex)){viewer.entities.remove(rec.entity);
+          if(rec.trail)viewer.entities.remove(rec.trail); assets.delete(hex);} }
+        applyFilter(); hideErr();
+      } catch(err){ showErr("aircraft: "+err.message); }
     }
 
     function applyFilter() {
-      const sel = document.getElementById("country").value;
-      const showAir = document.getElementById("chkAir").checked;
-      const showGnd = document.getElementById("chkGnd").checked;
-      const showSurf = document.getElementById("chkSurf").checked;
-      const showTrail = document.getElementById("chkTrail").checked;
-      let air = 0, gnd = 0, surf = 0, shown = 0;
-      for (const rec of assets.values()) {
-        let kindOk;
-        if (rec.kind === "ground") kindOk = showGnd;
-        else if (rec.kind === "surface") kindOk = showSurf;
-        else kindOk = showAir;
-        const ctryOk = sel === "__ALL__" || rec.ctry === sel;
-        const vis = kindOk && ctryOk;
-        rec.entity.show = vis;
-        if (rec.trail) rec.trail.show = vis && showTrail;
-        if (rec.kind === "ground") gnd++; else if (rec.kind === "surface") surf++; else air++;
-        if (vis) shown++;
+      const sel=document.getElementById("country").value;
+      const showAir=document.getElementById("chkAir").checked;
+      const showGnd=document.getElementById("chkGnd").checked;
+      const showSurf=document.getElementById("chkSurf").checked;
+      const showTrail=document.getElementById("chkTrail").checked;
+      let air=0,gnd=0,surf=0,shown=0;
+      for(const rec of assets.values()){
+        let kindOk = rec.kind==="ground"?showGnd : rec.kind==="surface"?showSurf : showAir;
+        const ctryOk = sel==="__ALL__"||rec.ctry===sel;
+        const vis=kindOk&&ctryOk;
+        rec.entity.show=vis; if(rec.trail)rec.trail.show=vis&&showTrail;
+        if(rec.kind==="ground")gnd++; else if(rec.kind==="surface")surf++; else air++;
+        if(vis)shown++;
       }
-      document.getElementById("hud").textContent =
-        "Air " + air + " · Gnd " + gnd + " · Surf " + surf + " · shown " + shown;
+      document.getElementById("hud").textContent="Air "+air+" · Gnd "+gnd+" · Surf "+surf+" · shown "+shown;
     }
 
-    const infoDiv = document.getElementById("info");
-    function showInfo(rec){
-      const i = rec.info;
-      infoDiv.innerHTML =
-        '<span class="close" onclick="document.getElementById(\'info\').style.display=\'none\'">close</span>' +
-        '<b>' + i.call + '</b>' + (i.onGround ? ' (on ground)' : '') + '<br>' +
-        '<div class="row">' + (flagEmoji(i.cc) ? flagEmoji(i.cc)+' ' : '') + i.ctry + ' · ' + i.type + ' · ' + i.cat + '</div>' +
-        '<div class="row">Alt ' + (i.altFt ? i.altFt.toLocaleString() + ' ft' : 'ground') +
-        ' · ' + i.gs + ' kt · hdg ' + i.track + '°</div>' +
-        '<div class="row">Hex ' + i.hex + ' · Squawk ' + i.squawk + '</div>';
-      infoDiv.style.display = "block";
-    }
-    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((click) => {
-      const picked = viewer.scene.pick(click.position);
-      if (picked && picked.id && picked.id._hex) { const rec = assets.get(picked.id._hex); if (rec) showInfo(rec); }
-      else { infoDiv.style.display = "none"; }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    // tap info
+    const infoDiv=document.getElementById("info");
+    function showInfo(rec){ const i=rec.info; const f=flagEmoji(i.cc);
+      infoDiv.innerHTML='<span class="close" onclick="document.getElementById(\'info\').style.display=\'none\'">close</span>'+
+        '<b>'+i.call+'</b>'+(i.onGround?' (on ground)':'')+'<br>'+
+        '<div class="row">'+(f?f+' ':'')+i.ctry+' · '+i.type+' · '+i.cat+'</div>'+
+        '<div class="row">Alt '+(i.altFt?i.altFt.toLocaleString()+' ft':'ground')+' · '+i.gs+' kt · hdg '+i.track+'°</div>'+
+        '<div class="row">Hex '+i.hex+' · Squawk '+i.squawk+'</div>';
+      infoDiv.style.display="block"; }
+    const handler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((click)=>{ const picked=viewer.scene.pick(click.position);
+      if(picked&&picked.id&&picked.id._hex){ const rec=assets.get(picked.id._hex); if(rec)showInfo(rec); }
+      else infoDiv.style.display="none"; }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    document.getElementById("country").addEventListener("change", applyFilter);
-    document.getElementById("chkAir").addEventListener("change", applyFilter);
-    document.getElementById("chkGnd").addEventListener("change", applyFilter);
-    document.getElementById("chkSurf").addEventListener("change", applyFilter);
-    document.getElementById("chkTrail").addEventListener("change", applyFilter);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) updateAircraft(); });
+    // controls
+    document.getElementById("country").addEventListener("change",(e)=>{
+      applyFilter();
+      const name=e.target.value;
+      if(name!=="__ALL__"){ const c=COUNTRY.get(name);
+        if(c&&typeof c.lat==="number"){ viewer.camera.flyTo({
+          destination:Cesium.Cartesian3.fromDegrees(c.lon,c.lat,3500000), duration:1.2 }); } }
+    });
+    ["chkAir","chkGnd","chkSurf","chkTrail"].forEach(id=>document.getElementById(id).addEventListener("change",applyFilter));
+    document.getElementById("btnHome").addEventListener("click",()=>viewer.camera.flyTo({destination:HOME,duration:1.0}));
+    document.getElementById("btnLoc").addEventListener("click",()=>{
+      if(!navigator.geolocation){ showErr("geolocation not available"); return; }
+      navigator.geolocation.getCurrentPosition((p)=>{
+        viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(p.coords.longitude,p.coords.latitude,800000),duration:1.2});
+      },(e)=>showErr("location: "+e.message),{enableHighAccuracy:true,timeout:10000});
+    });
+    document.addEventListener("visibilitychange",()=>{ if(!document.hidden) updateAircraft(); });
 
-    updateAircraft();
-    setInterval(updateAircraft, 15000);
+    // boot
+    loadCountries().then(()=>{ updateAircraft(); setInterval(updateAircraft,15000); });
   </script>
 </body>
 </html>
