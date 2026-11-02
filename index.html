@@ -17,13 +17,29 @@
     #panel select { width:100%; margin-top:6px; font-size:13px; padding:4px; border-radius:5px; background:#111; color:#fff; border:1px solid #444; }
     #panel label { display:inline-block; margin-top:6px; margin-right:10px; }
     #hud { font-weight:600; }
-    .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
     #btns { position:fixed; right:8px; top:8px; z-index:9998; display:flex; flex-direction:column; gap:8px; }
     #btns button { width:42px; height:42px; border-radius:21px; border:none; background:rgba(0,0,0,0.6); color:#fff; font-size:18px; }
-    #info { position:fixed; right:8px; bottom:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff; background:rgba(0,0,0,0.8); padding:10px 12px; border-radius:8px; max-width:72vw; display:none; }
-    #info b { font-size:14px; }
-    #info .row { margin-top:3px; color:#cfe; }
-    #info .close { float:right; margin-left:12px; color:#9ad; }
+    #settings { position:fixed; top:8px; right:58px; z-index:9999; width:230px; background:rgba(0,0,0,0.9); color:#fff; border-radius:10px; padding:12px; font:13px -apple-system,sans-serif; display:none; }
+    #settings h4 { margin:0 0 6px; font-size:13px; }
+    #settings .sw { display:flex; align-items:center; justify-content:space-between; margin:5px 0; }
+    #settings input[type=color] { width:38px; height:26px; border:none; background:none; }
+    #settings select { width:100%; margin:4px 0 10px; background:#111; color:#fff; border:1px solid #444; border-radius:5px; padding:4px; }
+    #sheet { position:fixed; left:0; right:0; bottom:0; z-index:9998; background:#111; color:#fff; font:13px -apple-system,sans-serif;
+             border-top-left-radius:16px; border-top-right-radius:16px; transform:translateY(100%); transition:transform .25s ease; max-height:62vh; overflow:auto; }
+    #sheet.open { transform:translateY(0); }
+    #sheet .head { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:#1b1b1b; position:sticky; top:0; }
+    #sheet .call { font-size:18px; font-weight:700; color:#ffcf33; }
+    #sheet .badge { background:#2a6; color:#fff; border-radius:5px; padding:1px 7px; font-size:12px; margin-left:8px; }
+    #sheet .sub { color:#bbb; font-size:13px; margin-top:2px; }
+    #sheet img.photo { width:100%; display:block; max-height:200px; object-fit:cover; background:#222; }
+    #sheet .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; padding:14px; }
+    #sheet .k { color:#8ab; font-size:11px; text-transform:uppercase; }
+    #sheet .v { font-size:16px; }
+    #sheet .acts { display:flex; gap:10px; padding:0 14px 16px; }
+    #sheet .acts a, #sheet .acts button { flex:1; text-align:center; text-decoration:none; background:#2b6cff; color:#fff; border:none; border-radius:8px; padding:10px; font-size:14px; }
+    #sheet .acts .sec { background:#333; }
+    #sheet .credit { padding:0 14px 12px; color:#888; font-size:11px; }
+    #sheet .x { color:#9ad; font-size:14px; }
   </style>
 </head>
 <body>
@@ -41,16 +57,35 @@
   <div id="btns">
     <button id="btnLoc" title="My location">📍</button>
     <button id="btnHome" title="Whole globe">🌐</button>
+    <button id="btnSet" title="Settings">⚙️</button>
   </div>
-  <div id="info"></div>
+  <div id="settings">
+    <h4>Color aircraft by</h4>
+    <select id="colorMode">
+      <option value="class">Class (editable)</option>
+      <option value="country">Country (auto)</option>
+      <option value="single">Single color</option>
+    </select>
+    <div id="swatches"></div>
+  </div>
+  <div id="sheet"></div>
   <div id="err"></div>
   <script>
     const WORKER = "https://overwatch.tassinjp.workers.dev";
-    const RANGES_URL = "ranges.json"; // same-origin on GitHub Pages
+    const RANGES_URL = "ranges.json";
 
     function showErr(msg){var e=document.getElementById("err");e.textContent="ERROR: "+msg;e.style.display="block";}
     function hideErr(){document.getElementById("err").style.display="none";}
     window.onerror=function(m,src,line,col,error){showErr((error&&error.message)?error.message:m);};
+
+    // ---- color settings (persisted) ----
+    const CLASS_LIST = ["cargo","tanker","fighter","stealth","bomber","recon","helo","trainer","generic"];
+    const DEFAULT_PALETTE = { cargo:"#4caf50", tanker:"#2196f3", fighter:"#f44336", stealth:"#9c27b0",
+      bomber:"#ff5722", recon:"#00bcd4", helo:"#ffeb3b", trainer:"#ff9800", generic:"#e0e0e0" };
+    let colorMode="class", palette={...DEFAULT_PALETTE}, singleColor="#ffdd00";
+    try { const s=JSON.parse(localStorage.getItem("ow_colors")||"{}");
+      if(s.mode)colorMode=s.mode; if(s.palette)palette={...DEFAULT_PALETTE,...s.palette}; if(s.single)singleColor=s.single; } catch(e){}
+    function saveColors(){ try{ localStorage.setItem("ow_colors",JSON.stringify({mode:colorMode,palette,single:singleColor})); }catch(e){} }
 
     Cesium.Ion.defaultAccessToken = "";
     const viewer = new Cesium.Viewer("cesiumContainer", {
@@ -64,7 +99,6 @@
     const HOME = Cesium.Cartesian3.fromDegrees(-70.0, 30.0, 16000000);
     viewer.camera.flyTo({ destination: HOME, duration: 0 });
 
-    // ---- class icons (white silhouettes, tinted per-country) ----
     function svg(inner){ return "data:image/svg+xml;utf8," + encodeURIComponent(
       "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" + inner + "</svg>"); }
     const P = {
@@ -87,75 +121,64 @@
       cargo:["C130","C30J","C17","C5","C5M","C295","C27J","C160","A400","AN32","AN12","AN26","IL76","C2","D228","C40","C32","B744","B742","B752","B762","B77W","B737","A320","A330","AT76","F50","C12","DHC6","DH8"],
       trainer:["PC21","PC7","TEX2","T6","T38","CT4","DA40","PC9","T45","G120","SF26"]
     };
-    const TYPE2CAT = {}; for (const c in SET) for (const t of SET[c]) TYPE2CAT[t]=c;
+    const TYPE2CAT={}; for(const c in SET) for(const t of SET[c]) TYPE2CAT[t]=c;
     function classify(a){ const t=(a.t||"").toUpperCase();
-      if (TYPE2CAT[t]) return TYPE2CAT[t];
-      if (a.category && String(a.category).toUpperCase()==="A7") return "helo"; return "generic"; }
-
+      if(TYPE2CAT[t]) return TYPE2CAT[t];
+      if(a.category&&String(a.category).toUpperCase()==="A7") return "helo"; return "generic"; }
     function flagEmoji(cc){ if(!cc||cc.length!==2) return "";
       const A=0x1F1E6; return String.fromCodePoint(A+cc.charCodeAt(0)-65)+String.fromCodePoint(A+cc.charCodeAt(1)-65); }
-
-    function hslColor(h){ // h in [0,360) -> Cesium.Color, fixed s/l
-      const s=0.85, l=0.58; const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
-      let r,g,b;
+    function hslColor(h){ const s=0.85,l=0.58,c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2; let r,g,b;
       if(h<60){r=c;g=x;b=0;}else if(h<120){r=x;g=c;b=0;}else if(h<180){r=0;g=c;b=x;}
       else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
-      return new Cesium.Color(r+m,g+m,b+m,1.0);
+      return new Cesium.Color(r+m,g+m,b+m,1.0); }
+
+    const COUNTRY=new Map();
+    const SURF_COLOR=Cesium.Color.fromCssColorString("#00e5ff");
+    function colorFor(rec){
+      if(rec.kind==="surface") return SURF_COLOR;
+      if(colorMode==="single") return Cesium.Color.fromCssColorString(singleColor);
+      if(colorMode==="country"){ const r=COUNTRY.get(rec.ctry); return (r&&r.color)||Cesium.Color.GRAY; }
+      return Cesium.Color.fromCssColorString(palette[rec.cat]||palette.generic);
     }
 
-    // country table (loaded from ranges.json): name -> {cc,lat,lon,color}
-    const COUNTRY = new Map();
-    const SURF_COLOR = Cesium.Color.fromCssColorString("#00e5ff");
-    const GRAY = Cesium.Color.fromCssColorString("#cccccc");
-    function countryColor(name){ const r=COUNTRY.get(name); return (r&&r.color)||GRAY; }
-
     async function loadCountries(){
-      try {
-        const r = await fetch(RANGES_URL, { cache:"force-cache" });
-        const rows = await r.json();  // [start,end,name,cc,lat,lon]
-        const uniq = new Map();
-        for (const row of rows){ const name=row[2];
-          if(!uniq.has(name)) uniq.set(name,{cc:row[3]||"",lat:row[4],lon:row[5]}); }
+      try{
+        const r=await fetch(RANGES_URL,{cache:"force-cache"}); const rows=await r.json();
+        const uniq=new Map();
+        for(const row of rows){ const name=row[2]; if(!uniq.has(name)) uniq.set(name,{cc:row[3]||"",lat:row[4],lon:row[5]}); }
         const names=[...uniq.keys()].sort();
         names.forEach((name,i)=>{ const u=uniq.get(name);
           COUNTRY.set(name,{cc:u.cc,lat:u.lat,lon:u.lon,color:hslColor((i*137.508)%360)}); });
-        // build full dropdown once
         const sel=document.getElementById("country");
         sel.innerHTML='<option value="__ALL__">All countries</option>';
         for(const name of names){ if(name.startsWith("Unassigned")||name.startsWith("ICAO")) continue;
           const o=document.createElement("option"); o.value=name;
           const f=flagEmoji(uniq.get(name).cc); o.textContent=(f?f+" ":"")+name; sel.appendChild(o); }
-      } catch(e){ /* dropdown still works dynamically if this fails */ }
+      }catch(e){}
     }
 
-    const assets = new Map();
-    const labelFade = new Cesium.NearFarScalar(2.0e6, 1.0, 1.4e7, 0.0);
-    function isSurface(a){ return a.category && String(a.category)[0]==="C"; }
-
+    const assets=new Map();
+    const LABEL_DDC=new Cesium.DistanceDisplayCondition(0.0, 1.8e6); // labels only when zoomed in
+    function isSurface(a){ return a.category&&String(a.category)[0]==="C"; }
     function currentCartesian(rec){
-      const spd=(rec.gs||0)*0.514444, dt=(Date.now()-rec.t0)/1000, dist=spd*dt;
+      const spd=(rec.gs||0)*0.514444,dt=(Date.now()-rec.t0)/1000,dist=spd*dt;
       if(dist<1) return Cesium.Cartesian3.fromDegrees(rec.lon0,rec.lat0,rec.altM);
-      const R=6378137, brng=Cesium.Math.toRadians(rec.track||0);
-      const lat1=Cesium.Math.toRadians(rec.lat0), lon1=Cesium.Math.toRadians(rec.lon0), dR=dist/R;
+      const R=6378137,brng=Cesium.Math.toRadians(rec.track||0);
+      const lat1=Cesium.Math.toRadians(rec.lat0),lon1=Cesium.Math.toRadians(rec.lon0),dR=dist/R;
       const lat2=Math.asin(Math.sin(lat1)*Math.cos(dR)+Math.cos(lat1)*Math.sin(dR)*Math.cos(brng));
       const lon2=lon1+Math.atan2(Math.sin(brng)*Math.sin(dR)*Math.cos(lat1),Math.cos(dR)-Math.sin(lat1)*Math.sin(lat2));
-      return Cesium.Cartesian3.fromRadians(lon2,lat2,rec.altM);
-    }
-
+      return Cesium.Cartesian3.fromRadians(lon2,lat2,rec.altM); }
     function mkLabel(text,dy){ return { text, font:"bold 13px -apple-system,sans-serif", fillColor:Cesium.Color.WHITE,
-      showBackground:true, backgroundColor:new Cesium.Color(0,0,0,0.55), backgroundPadding:new Cesium.Cartesian2(5,3),
-      style:Cesium.LabelStyle.FILL, pixelOffset:new Cesium.Cartesian2(0,dy), scale:0.85,
-      translucencyByDistance:labelFade, disableDepthTestDistance:Number.POSITIVE_INFINITY,
+      showBackground:true, backgroundColor:new Cesium.Color(0,0,0,0.6), backgroundPadding:new Cesium.Cartesian2(5,3),
+      style:Cesium.LabelStyle.FILL, pixelOffset:new Cesium.Cartesian2(0,dy), scale:1.0,
+      distanceDisplayCondition:LABEL_DDC, disableDepthTestDistance:Number.POSITIVE_INFINITY,
       horizontalOrigin:Cesium.HorizontalOrigin.LEFT }; }
 
-    async function updateAircraft() {
-      try {
-        const res = await fetch(WORKER + "/air", { cache: "no-store" });
-        const data = await res.json();
-        const list = data.ac || [];
-        const seen = new Set();
-
-        for (const a of list) {
+    async function updateAircraft(){
+      try{
+        const res=await fetch(WORKER+"/air",{cache:"no-store"}); const data=await res.json();
+        const list=data.ac||[]; const seen=new Set();
+        for(const a of list){
           let lat=(typeof a.lat==="number")?a.lat:(a.lastPosition&&a.lastPosition.lat);
           let lon=(typeof a.lon==="number")?a.lon:(a.lastPosition&&a.lastPosition.lon);
           if(typeof lat!=="number"||typeof lon!=="number") continue;
@@ -164,7 +187,6 @@
           const kind=isSurface(a)?"surface":(onGround?"ground":"air");
           const cat=isSurface(a)?"surface":classify(a);
           const ctry=a.ctry||"Unknown";
-          const col=countryColor(ctry);
           const altFt=(a.alt_baro==="ground"||a.alt_baro==null)?0:a.alt_baro;
           const altM=Math.max(altFt*0.3048,60);
           const call=(a.flight||"").trim()||hex.toUpperCase();
@@ -180,13 +202,14 @@
                 point:{pixelSize:7,color:SURF_COLOR,outlineColor:Cesium.Color.BLACK,outlineWidth:1},label:mkLabel(text,-13)});
             } else {
               rec.entity=viewer.entities.add({position:posProp,
-                billboard:{image:P[cat]||P.generic, scale:0.95, color:col,
-                  translucencyByDistance:new Cesium.NearFarScalar(2e6,(kind==="ground"?0.65:1.0),1.4e7,(kind==="ground"?0.45:0.85)),
+                billboard:{image:P[cat]||P.generic, scale:0.95, color:colorFor(rec),
+                  translucencyByDistance:new Cesium.NearFarScalar(2e6,(kind==="ground"?0.6:1.0),1.4e7,(kind==="ground"?0.4:0.9)),
                   rotation:new Cesium.CallbackProperty(()=>Cesium.Math.toRadians(-(rec.track||0)),false),
                   alignedAxis:Cesium.Cartesian3.ZERO},
                 label:mkLabel(text,-16)});
               if(kind==="air"){ rec.trail=viewer.entities.add({polyline:{
-                positions:new Cesium.CallbackProperty(()=>rec.hist,false), width:1.6, material:col.withAlpha(0.55)}}); }
+                positions:new Cesium.CallbackProperty(()=>rec.hist,false), width:1.6,
+                material:new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(()=>colorFor(rec).withAlpha(0.55),false))}}); }
             }
             rec.entity._hex=hex; if(rec.trail)rec.trail._hex=hex;
             assets.set(hex,rec);
@@ -195,68 +218,123 @@
             rec.track=a.track||rec.track; rec.gs=onGround?0:(a.gs||0); rec.t0=Date.now();
             rec.entity.label.text=text;
           }
+          if(rec.entity.billboard) rec.entity.billboard.color=colorFor(rec);
           const cc=(COUNTRY.get(ctry)||{}).cc||"";
-          rec.info={call,type:(a.t||"—"),cat,ctry,cc,altFt,gs:Math.round(a.gs||0),
+          rec.info={call,type:(a.t||"—"),reg:(a.r||""),cat,ctry,cc,altFt,gs:Math.round(a.gs||0),
                     track:Math.round(a.track||0),hex:hex.toUpperCase(),squawk:a.squawk||"—",onGround,lat,lon};
           if(kind==="air"){ rec.hist.push(Cesium.Cartesian3.fromDegrees(lon,lat,altM)); if(rec.hist.length>12)rec.hist.shift(); }
         }
         for(const [hex,rec] of assets){ if(!seen.has(hex)){viewer.entities.remove(rec.entity);
           if(rec.trail)viewer.entities.remove(rec.trail); assets.delete(hex);} }
+        // refresh open sheet
+        if(openHex && assets.has(openHex)) fillSheet(assets.get(openHex), false);
         applyFilter(); hideErr();
-      } catch(err){ showErr("aircraft: "+err.message); }
+      }catch(err){ showErr("aircraft: "+err.message); }
     }
 
-    function applyFilter() {
+    function recolorAll(){ for(const rec of assets.values()){ if(rec.entity.billboard) rec.entity.billboard.color=colorFor(rec); } }
+
+    function applyFilter(){
       const sel=document.getElementById("country").value;
-      const showAir=document.getElementById("chkAir").checked;
-      const showGnd=document.getElementById("chkGnd").checked;
-      const showSurf=document.getElementById("chkSurf").checked;
-      const showTrail=document.getElementById("chkTrail").checked;
+      const showAir=document.getElementById("chkAir").checked, showGnd=document.getElementById("chkGnd").checked;
+      const showSurf=document.getElementById("chkSurf").checked, showTrail=document.getElementById("chkTrail").checked;
       let air=0,gnd=0,surf=0,shown=0;
       for(const rec of assets.values()){
-        let kindOk = rec.kind==="ground"?showGnd : rec.kind==="surface"?showSurf : showAir;
-        const ctryOk = sel==="__ALL__"||rec.ctry===sel;
-        const vis=kindOk&&ctryOk;
+        let kindOk=rec.kind==="ground"?showGnd:rec.kind==="surface"?showSurf:showAir;
+        const ctryOk=sel==="__ALL__"||rec.ctry===sel; const vis=kindOk&&ctryOk;
         rec.entity.show=vis; if(rec.trail)rec.trail.show=vis&&showTrail;
-        if(rec.kind==="ground")gnd++; else if(rec.kind==="surface")surf++; else air++;
-        if(vis)shown++;
+        if(rec.kind==="ground")gnd++; else if(rec.kind==="surface")surf++; else air++; if(vis)shown++;
       }
       document.getElementById("hud").textContent="Air "+air+" · Gnd "+gnd+" · Surf "+surf+" · shown "+shown;
     }
 
-    // tap info
-    const infoDiv=document.getElementById("info");
-    function showInfo(rec){ const i=rec.info; const f=flagEmoji(i.cc);
-      infoDiv.innerHTML='<span class="close" onclick="document.getElementById(\'info\').style.display=\'none\'">close</span>'+
-        '<b>'+i.call+'</b>'+(i.onGround?' (on ground)':'')+'<br>'+
-        '<div class="row">'+(f?f+' ':'')+i.ctry+' · '+i.type+' · '+i.cat+'</div>'+
-        '<div class="row">Alt '+(i.altFt?i.altFt.toLocaleString()+' ft':'ground')+' · '+i.gs+' kt · hdg '+i.track+'°</div>'+
-        '<div class="row">Hex '+i.hex+' · Squawk '+i.squawk+'</div>';
-      infoDiv.style.display="block"; }
+    // ---- bottom sheet ----
+    const sheet=document.getElementById("sheet");
+    let openHex=null; const photoCache=new Map();
+    function closeSheet(){ sheet.classList.remove("open"); openHex=null; viewer.trackedEntity=undefined; }
+    function fillSheet(rec, animate){
+      const i=rec.info; openHex=i.hex.toLowerCase(); const f=flagEmoji(i.cc);
+      const fr24 = "https://www.flightradar24.com/data/aircraft/" + (i.reg||i.hex).toLowerCase().replace(/[^a-z0-9-]/g,"");
+      const tracking = (viewer.trackedEntity===rec.entity);
+      sheet.innerHTML =
+        '<div class="head"><div><span class="call">'+i.call+'</span>'+(i.type!=="—"?'<span class="badge">'+i.type+'</span>':'')+
+          '<div class="sub">'+(f?f+' ':'')+i.ctry+(i.reg?' · '+i.reg:'')+' · '+i.cat+(i.onGround?' · on ground':'')+'</div></div>'+
+          '<span class="x" onclick="window.__close()">✕</span></div>'+
+        '<img class="photo" id="acphoto" alt="" style="display:none">'+
+        '<div class="grid">'+
+          '<div><div class="k">Altitude</div><div class="v">'+(i.altFt?i.altFt.toLocaleString()+" ft":"ground")+'</div></div>'+
+          '<div><div class="k">Ground speed</div><div class="v">'+i.gs+' kt</div></div>'+
+          '<div><div class="k">Heading</div><div class="v">'+i.track+'°</div></div>'+
+          '<div><div class="k">Squawk</div><div class="v">'+i.squawk+'</div></div>'+
+          '<div><div class="k">ICAO hex</div><div class="v">'+i.hex+'</div></div>'+
+          '<div><div class="k">Position</div><div class="v">'+i.lat.toFixed(3)+", "+i.lon.toFixed(3)+'</div></div>'+
+        '</div>'+
+        '<div class="acts">'+
+          '<button onclick="window.__follow()">'+(tracking?"Stop follow":"Follow / 3D")+'</button>'+
+          '<a class="sec" href="'+fr24+'" target="_blank" rel="noopener">History (FR24)</a>'+
+        '</div>'+
+        '<div class="credit" id="accredit"></div>';
+      if(animate) sheet.classList.add("open");
+      loadPhoto(i.hex);
+    }
+    async function loadPhoto(hex){
+      const img=document.getElementById("acphoto"), cr=document.getElementById("accredit");
+      if(!img) return;
+      try{
+        let p=photoCache.get(hex);
+        if(!p){ const r=await fetch(WORKER+"/photo?hex="+hex); const j=await r.json(); p=(j.photos&&j.photos[0])||null; photoCache.set(hex,p); }
+        if(p && openHex===hex.toLowerCase()){
+          img.src=p.thumbnail_large?p.thumbnail_large.src:p.thumbnail.src; img.style.display="block";
+          if(cr) cr.innerHTML='Photo © '+(p.photographer||"")+' · <a style="color:#9ad" href="'+p.link+'" target="_blank" rel="noopener">Planespotters</a>';
+        }
+      }catch(e){}
+    }
+    window.__close=closeSheet;
+    window.__follow=function(){ const rec=assets.get(openHex); if(!rec) return;
+      if(viewer.trackedEntity===rec.entity){ viewer.trackedEntity=undefined; } else { viewer.trackedEntity=rec.entity; }
+      fillSheet(rec,true); };
+
     const handler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click)=>{ const picked=viewer.scene.pick(click.position);
-      if(picked&&picked.id&&picked.id._hex){ const rec=assets.get(picked.id._hex); if(rec)showInfo(rec); }
-      else infoDiv.style.display="none"; }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      if(picked&&picked.id&&picked.id._hex){ const rec=assets.get(picked.id._hex); if(rec) fillSheet(rec,true); }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    // controls
-    document.getElementById("country").addEventListener("change",(e)=>{
-      applyFilter();
-      const name=e.target.value;
-      if(name!=="__ALL__"){ const c=COUNTRY.get(name);
-        if(c&&typeof c.lat==="number"){ viewer.camera.flyTo({
-          destination:Cesium.Cartesian3.fromDegrees(c.lon,c.lat,3500000), duration:1.2 }); } }
-    });
+    // ---- settings panel ----
+    function buildSwatches(){
+      const box=document.getElementById("swatches"); box.innerHTML="";
+      document.getElementById("colorMode").value=colorMode;
+      if(colorMode==="class"){
+        for(const c of CLASS_LIST){ const row=document.createElement("div"); row.className="sw";
+          row.innerHTML='<span>'+c+'</span>';
+          const inp=document.createElement("input"); inp.type="color"; inp.value=palette[c];
+          inp.addEventListener("input",()=>{ palette[c]=inp.value; saveColors(); recolorAll(); });
+          row.appendChild(inp); box.appendChild(row); }
+      } else if(colorMode==="single"){
+        const row=document.createElement("div"); row.className="sw"; row.innerHTML='<span>All aircraft</span>';
+        const inp=document.createElement("input"); inp.type="color"; inp.value=singleColor;
+        inp.addEventListener("input",()=>{ singleColor=inp.value; saveColors(); recolorAll(); });
+        row.appendChild(inp); box.appendChild(row);
+      } else { box.innerHTML='<div style="color:#aaa">Each country auto-colored.</div>'; }
+    }
+    document.getElementById("colorMode").addEventListener("change",(e)=>{ colorMode=e.target.value; saveColors(); buildSwatches(); recolorAll(); });
+    document.getElementById("btnSet").addEventListener("click",()=>{ const s=document.getElementById("settings");
+      s.style.display = s.style.display==="none"||!s.style.display ? "block":"none"; buildSwatches(); });
+
+    // ---- controls ----
+    document.getElementById("country").addEventListener("change",(e)=>{ applyFilter();
+      const name=e.target.value; if(name!=="__ALL__"){ const c=COUNTRY.get(name);
+        if(c&&typeof c.lat==="number") viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(c.lon,c.lat,3500000),duration:1.2}); } });
     ["chkAir","chkGnd","chkSurf","chkTrail"].forEach(id=>document.getElementById(id).addEventListener("change",applyFilter));
-    document.getElementById("btnHome").addEventListener("click",()=>viewer.camera.flyTo({destination:HOME,duration:1.0}));
+    document.getElementById("btnHome").addEventListener("click",()=>{ viewer.trackedEntity=undefined; viewer.camera.flyTo({destination:HOME,duration:1.0}); });
     document.getElementById("btnLoc").addEventListener("click",()=>{
-      if(!navigator.geolocation){ showErr("geolocation not available"); return; }
-      navigator.geolocation.getCurrentPosition((p)=>{
-        viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(p.coords.longitude,p.coords.latitude,800000),duration:1.2});
-      },(e)=>showErr("location: "+e.message),{enableHighAccuracy:true,timeout:10000});
+      if(!navigator.geolocation){ showErr("geolocation not supported"); return; }
+      navigator.geolocation.getCurrentPosition(
+        (p)=>viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(p.coords.longitude,p.coords.latitude,800000),duration:1.2}),
+        (e)=>showErr("Location blocked. Enable it: iPhone Settings → Apps → Safari → Location → Allow, then tap 📍 again. ("+e.message+")"),
+        {enableHighAccuracy:true,timeout:10000});
     });
     document.addEventListener("visibilitychange",()=>{ if(!document.hidden) updateAircraft(); });
 
-    // boot
     loadCountries().then(()=>{ updateAircraft(); setInterval(updateAircraft,15000); });
   </script>
 </body>
