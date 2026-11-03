@@ -299,12 +299,26 @@
     const handler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click)=>{
       const picks=viewer.scene.drillPick(click.position) || [];
-      // aircraft first
       for(const pk of picks){ if(pk&&pk.id&&pk.id._hex){ const rec=assets.get(pk.id._hex); if(rec){ fillSheet(rec,true); return; } } }
-      // then a grid region polygon
-      for(const pk of picks){ if(pk&&pk.id&&pk.id.properties&&pk.id.properties.region){ showGridInfo(pk.id.properties.region.getValue()); return; } }
+      // grid region by geographic point (works in 2D and 3D)
+      if(document.getElementById("chkGrid").checked && gridFeatures){
+        const cart=viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+        if(cart){ const c=Cesium.Cartographic.fromCartesian(cart);
+          const lon=Cesium.Math.toDegrees(c.longitude), lat=Cesium.Math.toDegrees(c.latitude);
+          const reg=regionAt(lon,lat); if(reg){ showGridInfo(reg); return; } }
+      }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+    function ptInRing(lon,lat,ring){ let inside=false;
+      for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+        if(((yi>lat)!==(yj>lat))&&(lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
+    function ptInPoly(lon,lat,rings){ if(!ptInRing(lon,lat,rings[0])) return false;
+      for(let k=1;k<rings.length;k++) if(ptInRing(lon,lat,rings[k])) return false; return true; }
+    function regionAt(lon,lat){ if(!gridFeatures) return null;
+      for(const f of gridFeatures){ const g=f.geometry;
+        if(g.type==="Polygon"){ if(ptInPoly(lon,lat,g.coordinates)) return f.properties.region; }
+        else if(g.type==="MultiPolygon"){ for(const poly of g.coordinates){ if(ptInPoly(lon,lat,poly)) return f.properties.region; } } }
+      return null; }
     // grid region fuel-mix panel
     const FUEL={NUC:["Nuclear","#f5d442"],NG:["Natural gas","#ef7d3b"],COL:["Coal","#8b7355"],
       WAT:["Hydro","#3b9cff"],WND:["Wind","#35d0a5"],SUN:["Solar","#ffe14d"],OIL:["Oil","#b05a5a"],
@@ -368,13 +382,14 @@
 
     // ---- Power grid layer (EIA): shaded state polygons by region status ----
     const GRID_URL="eia-states.geojson";
-    let gridDS=null; const gridLabels=[]; let gridStatus={};
+    let gridDS=null; const gridLabels=[]; let gridStatus={}; let gridFeatures=null;
     const GRID_COLOR={green:Cesium.Color.fromCssColorString("#22c55e"),
       yellow:Cesium.Color.fromCssColorString("#eab308"), red:Cesium.Color.fromCssColorString("#ef4444")};
     async function ensureGridGeo(){
       if(gridDS) return gridDS;
       gridDS=await Cesium.GeoJsonDataSource.load(GRID_URL);
       await viewer.dataSources.add(gridDS);
+      try{ const rr=await fetch(GRID_URL,{cache:"force-cache"}); gridFeatures=(await rr.json()).features||[]; }catch(e){}
       for(const ent of gridDS.entities.values){ if(ent.polygon){
         ent.polygon.height=0; ent.polygon.outline=true;
         ent.polygon.outlineColor=Cesium.Color.BLACK.withAlpha(0.4);
