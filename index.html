@@ -70,6 +70,7 @@
     <div id="swatches"></div>
   </div>
   <div id="sheet"></div>
+  <div id="ginfo"></div>
   <div id="err"></div>
   <script>
     const WORKER = "https://overwatch.tassinjp.workers.dev";
@@ -298,7 +299,32 @@
     const handler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click)=>{ const picked=viewer.scene.pick(click.position);
       if(picked&&picked.id&&picked.id._hex){ const rec=assets.get(picked.id._hex); if(rec) fillSheet(rec,true); }
+      else if(picked&&picked.id&&picked.id.properties&&picked.id.properties.region){ showGridInfo(picked.id.properties.region.getValue()); }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // grid region fuel-mix panel
+    const FUEL={NUC:["Nuclear","#f5d442"],NG:["Natural gas","#ef7d3b"],COL:["Coal","#8b7355"],
+      WAT:["Hydro","#3b9cff"],WND:["Wind","#35d0a5"],SUN:["Solar","#ffe14d"],OIL:["Oil","#b05a5a"],
+      OTH:["Other","#9aa0a6"],BAT:["Battery","#a06cff"]};
+    let openRegion=null;
+    function showGridInfo(code){
+      const g=gridStatus[code]; const gi=document.getElementById("ginfo");
+      if(!g){ gi.style.display="none"; openRegion=null; return; }
+      openRegion=code;
+      const mix=g.mix||{}; const entries=Object.keys(mix).map(k=>[k,mix[k]]).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+      const total=entries.reduce((s,e)=>s+e[1],0)||1;
+      let rows="";
+      for(const [ft,v] of entries){ const meta=FUEL[ft]||[ft,"#888"]; const pct=Math.round(v/total*100);
+        rows+='<div class="frow"><div class="fname">'+meta[0]+'</div>'+
+          '<div class="fbar"><div style="width:'+pct+'%;background:'+meta[1]+'"></div></div>'+
+          '<div class="fval">'+pct+'%</div></div>'; }
+      gi.innerHTML='<span class="x" onclick="window.__gclose()">✕</span>'+
+        '<h4>'+g.name+'</h4><div class="sub">Demand '+g.demand.toLocaleString()+' MW · '+g.status+'</div>'+
+        (rows||'<div style="color:#999">No fuel data</div>')+
+        '<div style="color:#789;font-size:10px;margin-top:6px">Generation by fuel · live</div>';
+      gi.style.display="block";
+    }
+    window.__gclose=function(){ document.getElementById("ginfo").style.display="none"; openRegion=null; };
 
     // ---- settings panel ----
     function buildSwatches(){
@@ -368,7 +394,7 @@
         if(d.error){ showErr("grid: "+d.error); return; }
         gridStatus={}; clearGridLabels();
         for(const g of (d.regions||[])){
-          gridStatus[g.code]={status:g.status,demand:g.demand};
+          gridStatus[g.code]={status:g.status,demand:g.demand,name:g.name,mix:g.mix||{}};
           gridLabels.push(viewer.entities.add({
             position:Cesium.Cartesian3.fromDegrees(g.lon,g.lat),
             label:{ text:g.name+"\n"+g.demand.toLocaleString()+" MW",
@@ -379,7 +405,7 @@
               disableDepthTestDistance:Number.POSITIVE_INFINITY }
           }));
         }
-        colorGridPolys(); hideErr();
+        colorGridPolys(); if(openRegion) showGridInfo(openRegion); hideErr();
       }catch(e){ showErr("grid: "+e.message); }
     }
     document.getElementById("chkGrid").addEventListener("change",updateGrid);
