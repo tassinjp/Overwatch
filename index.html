@@ -301,11 +301,16 @@
       const picks=viewer.scene.drillPick(click.position) || [];
       for(const pk of picks){ if(pk&&pk.id&&pk.id._hex){ const rec=assets.get(pk.id._hex); if(rec){ fillSheet(rec,true); return; } } }
       // grid region by geographic point (works in 2D and 3D)
-      if(document.getElementById("chkGrid").checked && gridFeatures){
+      if(document.getElementById("chkGrid").checked){
         const cart=viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
         if(cart){ const c=Cesium.Cartographic.fromCartesian(cart);
           const lon=Cesium.Math.toDegrees(c.longitude), lat=Cesium.Math.toDegrees(c.latitude);
-          const reg=regionAt(lon,lat); if(reg){ showGridInfo(reg); return; } }
+          const reg=gridFeatures?regionAt(lon,lat):null;
+          if(reg){ showGridInfo(reg); return; }
+          const gi=document.getElementById("ginfo");
+          gi.innerHTML='<span class="x" onclick="window.__gclose()">\u2715</span>tap '+lat.toFixed(2)+', '+lon.toFixed(2)+'<br>region: none<br>shapes loaded: '+(gridFeatures?gridFeatures.length:'NO');
+          gi.style.display="block"; return;
+        }
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -324,9 +329,10 @@
       WAT:["Hydro","#3b9cff"],WND:["Wind","#35d0a5"],SUN:["Solar","#ffe14d"],OIL:["Oil","#b05a5a"],
       OTH:["Other","#9aa0a6"],BAT:["Battery","#a06cff"]};
     let openRegion=null;
+    const REGION_NAMES={CAL:"California",CAR:"Carolinas",CENT:"Central (SPP)",FLA:"Florida",MIDA:"Mid-Atlantic (PJM)",MIDW:"Midwest (MISO)",NE:"New England",NW:"Northwest",NY:"New York",SE:"Southeast",SW:"Southwest",TEN:"Tennessee",TEX:"Texas (ERCOT)"};
     function showGridInfo(code){
-      const g=gridStatus[code]; const gi=document.getElementById("ginfo");
-      if(!g){ gi.style.display="none"; openRegion=null; return; }
+      const gi=document.getElementById("ginfo");
+      const g=gridStatus[code]||{name:REGION_NAMES[code]||code,demand:null,status:"loading",mix:{}};
       openRegion=code;
       const mix=g.mix||{}; const entries=Object.keys(mix).map(k=>[k,mix[k]]).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
       const total=entries.reduce((s,e)=>s+e[1],0)||1;
