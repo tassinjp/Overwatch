@@ -297,9 +297,12 @@
       fillSheet(rec,true); };
 
     const handler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((click)=>{ const picked=viewer.scene.pick(click.position);
-      if(picked&&picked.id&&picked.id._hex){ const rec=assets.get(picked.id._hex); if(rec) fillSheet(rec,true); }
-      else if(picked&&picked.id&&picked.id.properties&&picked.id.properties.region){ showGridInfo(picked.id.properties.region.getValue()); }
+    handler.setInputAction((click)=>{
+      const picks=viewer.scene.drillPick(click.position) || [];
+      // aircraft first
+      for(const pk of picks){ if(pk&&pk.id&&pk.id._hex){ const rec=assets.get(pk.id._hex); if(rec){ fillSheet(rec,true); return; } } }
+      // then a grid region polygon
+      for(const pk of picks){ if(pk&&pk.id&&pk.id.properties&&pk.id.properties.region){ showGridInfo(pk.id.properties.region.getValue()); return; } }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     // grid region fuel-mix panel
