@@ -52,6 +52,7 @@
       <label><input type="checkbox" id="chkGnd" checked> Ground</label>
       <label><input type="checkbox" id="chkSurf" checked> Surface</label>
       <label><input type="checkbox" id="chkTrail" checked> Trails</label>
+      <label><input type="checkbox" id="chkGrid"> ⚡Grid</label>
     </div>
   </div>
   <div id="btns">
@@ -335,7 +336,39 @@
     });
     document.addEventListener("visibilitychange",()=>{ if(!document.hidden) updateAircraft(); });
 
+
+    // ---- Power grid layer (EIA) ----
+    const gridEntities=[];
+    const GRID_COLOR={green:Cesium.Color.fromCssColorString("#22c55e"),
+      yellow:Cesium.Color.fromCssColorString("#eab308"), red:Cesium.Color.fromCssColorString("#ef4444")};
+    function clearGrid(){ for(const e of gridEntities) viewer.entities.remove(e); gridEntities.length=0; }
+    async function updateGrid(){
+      if(!document.getElementById("chkGrid").checked){ clearGrid(); return; }
+      try{
+        const r=await fetch(WORKER+"/grid",{cache:"no-store"}); const d=await r.json();
+        clearGrid();
+        if(d.error){ showErr("grid: "+d.error); return; }
+        for(const g of (d.regions||[])){
+          const col=GRID_COLOR[g.status]||GRID_COLOR.green;
+          gridEntities.push(viewer.entities.add({
+            position:Cesium.Cartesian3.fromDegrees(g.lon,g.lat),
+            ellipse:{ semiMajorAxis:320000, semiMinorAxis:320000, height:0,
+              material:col.withAlpha(0.22), outline:true, outlineColor:col.withAlpha(0.9), outlineWidth:2 },
+            label:{ text:g.name+"\n"+g.demand.toLocaleString()+" MW",
+              font:"bold 12px -apple-system,sans-serif", fillColor:Cesium.Color.WHITE,
+              showBackground:true, backgroundColor:new Cesium.Color(0,0,0,0.6),
+              backgroundPadding:new Cesium.Cartesian2(5,3), style:Cesium.LabelStyle.FILL,
+              distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0.0,9.0e6),
+              disableDepthTestDistance:Number.POSITIVE_INFINITY }
+          }));
+        }
+        hideErr();
+      }catch(e){ showErr("grid: "+e.message); }
+    }
+    document.getElementById("chkGrid").addEventListener("change",updateGrid);
+
     loadCountries().then(()=>{ updateAircraft(); setInterval(updateAircraft,15000); });
+    updateGrid(); setInterval(updateGrid, 600000); // grid every 10 min
   </script>
 </body>
 </html>
