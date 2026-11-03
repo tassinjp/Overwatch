@@ -428,6 +428,8 @@
     }
     document.getElementById("chkGrid").addEventListener("change",updateGrid);
 
+    // preload grid region shapes so region taps work even before toggling Grid
+    fetch(GRID_URL,{cache:"force-cache"}).then(r=>r.json()).then(j=>{ gridFeatures=j.features||[]; }).catch(()=>{});
     loadCountries().then(()=>{ updateAircraft(); setInterval(updateAircraft,15000); });
     updateGrid(); setInterval(updateGrid, 600000); // grid every 10 min
   </script>
