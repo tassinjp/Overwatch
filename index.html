@@ -386,9 +386,120 @@
       }
     }
 
-    /* First fetch, then schedule recurring */
+    /* ═══════════════════════════════════════════════
+       MILITARY BASES LAYER  (OSM data, ODbL)
+       9,807 installations worldwide
+       ═══════════════════════════════════════════════ */
+    // Classes: 0=military_land(excluded), 1=airfield, 2=naval_base,
+    //          3=range, 4=barracks, 5=base, 6=training_area
+    const BASE_COLORS = [
+      null,                                             // 0 — not in data
+      Cesium.Color.fromCssColorString("#5B9BD5"),       // 1 airfield
+      Cesium.Color.fromCssColorString("#2E75B6"),       // 2 naval_base
+      Cesium.Color.fromCssColorString("#C55A11"),       // 3 range
+      Cesium.Color.fromCssColorString("#A9D18E"),       // 4 barracks
+      Cesium.Color.fromCssColorString("#548235"),       // 5 base
+      Cesium.Color.fromCssColorString("#BF8F00"),       // 6 training_area
+    ];
+    const BASE_TYPE = [
+      "Military Land","Airfield","Naval Base","Range",
+      "Barracks","Base","Training Area"
+    ];
+    const TIER1 = new Set([1, 2, 5]); // high-vis: airfield, naval, base
+
+    const basesSource = new Cesium.CustomDataSource("bases");
+    viewer.dataSources.add(basesSource);
+
+    /* Hide base layer entirely above ~8 000 km */
+    viewer.scene.preRender.addEventListener(() => {
+      const h = viewer.camera.positionCartographic.height;
+      basesSource.show = h < 8000000;
+    });
+
+    function baseDesc(name, cls, lon, lat, w, s, e, n) {
+      const type  = BASE_TYPE[cls] || "Unknown";
+      const cssc  = (BASE_COLORS[cls] || Cesium.Color.GRAY).toCssColorString();
+      const dLat  = n - s, dLon = e - w;
+      const cosL  = Math.cos(((n + s) / 2) * Math.PI / 180);
+      const km2   = (dLat * 111.32) * (dLon * 111.32 * cosL);
+      const area  = km2 >= 1 ? km2.toFixed(1) + " km²"
+                              : (km2 * 1e6).toFixed(0) + " m²";
+      const lD = lat >= 0 ? "N" : "S", nD = lon >= 0 ? "E" : "W";
+      return `<div style="font-family:-apple-system,system-ui,sans-serif;
+                          font-size:13px;color:#ccc;line-height:1.7;">
+        <table style="border-collapse:collapse;width:100%;">
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Type</td>
+              <td><span style="color:${cssc};font-weight:700;">●</span> ${type}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Area</td>
+              <td>≈ ${area}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Coords</td>
+              <td>${Math.abs(lat).toFixed(4)}°${lD}, ${Math.abs(lon).toFixed(4)}°${nD}</td></tr>
+        </table>
+        <div style="margin-top:8px;font-size:10px;color:#555;">
+          Data: OpenStreetMap contributors (ODbL)</div>
+      </div>`;
+    }
+
+    async function loadBases() {
+      try {
+        const res = await fetch("bases.json");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const json = await res.json();
+        const recs = json.records;
+
+        for (let i = 0; i < recs.length; i++) {
+          const [name, lon, lat, cls, w, s, e, n] = recs[i];
+          const color  = BASE_COLORS[cls] || Cesium.Color.GRAY;
+          const tier1  = TIER1.has(cls);
+          const ptDist = tier1 ? 6000000 : 2000000;
+          const lbDist = tier1 ?  800000 :  400000;
+
+          basesSource.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 80),
+            point: {
+              pixelSize: tier1 ? 7 : 5,
+              color: color,
+              outlineColor: Cesium.Color.BLACK.withAlpha(0.3),
+              outlineWidth: 1,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              distanceDisplayCondition:
+                new Cesium.DistanceDisplayCondition(0, ptDist),
+            },
+            label: {
+              text: name,
+              font: "500 9.5px -apple-system, system-ui, sans-serif",
+              fillColor: color.brighten(0.3, new Cesium.Color()),
+              outlineColor: Cesium.Color.BLACK.withAlpha(0.65),
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              pixelOffset: new Cesium.Cartesian2(0, -10),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              distanceDisplayCondition:
+                new Cesium.DistanceDisplayCondition(0, lbDist),
+              scale: 0.8,
+            },
+            name: name,
+            description: baseDesc(name, cls, lon, lat, w, s, e, n),
+          });
+
+          /* Yield to render loop every 800 entities so the page stays
+             responsive on mobile during the initial 10k load */
+          if (i % 800 === 799)
+            await new Promise(r => setTimeout(r, 0));
+        }
+
+        console.log(`Bases layer: ${recs.length} installations loaded`);
+      } catch (err) {
+        console.error("Bases load failed:", err);
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       START LAYERS
+       ═══════════════════════════════════════════════ */
     await refreshAircraft();
     setInterval(refreshAircraft, REFRESH_MS);
+    loadBases();   // non-blocking — bases stream in after aircraft appear
 
   })();
   </script>
