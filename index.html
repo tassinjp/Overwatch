@@ -1,443 +1,396 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0a0f">
   <title>Overwatch</title>
-  <script>window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/";</script>
-  <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
-  <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
+
+  <!-- CesiumJS 1.146 -->
+  <script>window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.146/Build/Cesium/";</script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.146/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.146/Build/Cesium/Cesium.js"></script>
+
   <style>
-    html, body, #cesiumContainer { width:100%; height:100%; margin:0; padding:0; overflow:hidden; background:#000; }
-    .cesium-widget-credits { display:none !important; }
-    #err { position:fixed; left:0; right:0; bottom:0; z-index:9999; font:13px monospace; color:#fff; background:#b00020; padding:10px 12px; white-space:pre-wrap; display:none; }
-    #panel { position:fixed; top:8px; left:8px; z-index:9998; font:12px -apple-system,sans-serif; color:#fff; background:rgba(0,0,0,0.62); padding:8px 10px; border-radius:8px; max-width:66vw; }
-    #panel select { width:100%; margin-top:6px; font-size:13px; padding:4px; border-radius:5px; background:#111; color:#fff; border:1px solid #444; }
-    #panel label { display:inline-block; margin-top:6px; margin-right:10px; }
-    #hud { font-weight:600; }
-    #btns { position:fixed; right:8px; top:8px; z-index:9998; display:flex; flex-direction:column; gap:8px; }
-    #btns button { width:42px; height:42px; border-radius:21px; border:none; background:rgba(0,0,0,0.6); color:#fff; font-size:18px; }
-    #settings { position:fixed; top:8px; right:58px; z-index:9999; width:230px; background:rgba(0,0,0,0.9); color:#fff; border-radius:10px; padding:12px; font:13px -apple-system,sans-serif; display:none; }
-    #settings h4 { margin:0 0 6px; font-size:13px; }
-    #settings .sw { display:flex; align-items:center; justify-content:space-between; margin:5px 0; }
-    #settings input[type=color] { width:38px; height:26px; border:none; background:none; }
-    #settings select { width:100%; margin:4px 0 10px; background:#111; color:#fff; border:1px solid #444; border-radius:5px; padding:4px; }
-    #sheet { position:fixed; left:0; right:0; bottom:0; z-index:9998; background:#111; color:#fff; font:13px -apple-system,sans-serif;
-             border-top-left-radius:16px; border-top-right-radius:16px; transform:translateY(100%); transition:transform .25s ease; max-height:62vh; overflow:auto; }
-    #sheet.open { transform:translateY(0); }
-    #sheet .head { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:#1b1b1b; position:sticky; top:0; }
-    #sheet .call { font-size:18px; font-weight:700; color:#ffcf33; }
-    #sheet .badge { background:#2a6; color:#fff; border-radius:5px; padding:1px 7px; font-size:12px; margin-left:8px; }
-    #sheet .sub { color:#bbb; font-size:13px; margin-top:2px; }
-    #sheet img.photo { width:100%; display:block; max-height:200px; object-fit:cover; background:#222; }
-    #sheet .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; padding:14px; }
-    #sheet .k { color:#8ab; font-size:11px; text-transform:uppercase; }
-    #sheet .v { font-size:16px; }
-    #sheet .acts { display:flex; gap:10px; padding:0 14px 16px; }
-    #sheet .acts a, #sheet .acts button { flex:1; text-align:center; text-decoration:none; background:#2b6cff; color:#fff; border:none; border-radius:8px; padding:10px; font-size:14px; }
-    #sheet .acts .sec { background:#333; }
-    #sheet .credit { padding:0 14px 12px; color:#888; font-size:11px; }
-    #sheet .x { color:#9ad; font-size:14px; }
+    /* ── Reset ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #0a0a0f; color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Map container ────────────────────────────── */
+    #cesiumContainer { position: absolute; inset: 0; }
+
+    /* Keep Google / Cesium attribution visible but subtle */
+    .cesium-viewer-bottom {
+      opacity: 0.35; font-size: 10px !important;
+      pointer-events: auto;
+    }
+
+    /* ── Loading overlay ──────────────────────────── */
+    #loading {
+      position: fixed; inset: 0; z-index: 200;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #0a0a0f;
+      transition: opacity 1s ease, visibility 1s;
+    }
+    #loading.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    #loading h1 {
+      font-size: 15px; font-weight: 700;
+      letter-spacing: 4px; text-transform: uppercase;
+      color: rgba(255,255,255,0.75);
+      margin-bottom: 20px;
+    }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 2px solid rgba(255,255,255,0.08);
+      border-top-color: rgba(255,255,255,0.5);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── HUD bar ──────────────────────────────────── */
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 100%);
+      z-index: 50; pointer-events: none;
+      opacity: 0; transition: opacity 0.6s ease;
+    }
+    #hud.visible { opacity: 1; }
+
+    .hud-brand {
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 3.5px; text-transform: uppercase;
+      color: rgba(255,255,255,0.8);
+    }
+    .hud-right {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; font-weight: 500;
+      color: rgba(255,255,255,0.65);
+    }
+
+    .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      flex-shrink: 0; transition: background 0.3s, box-shadow 0.3s;
+    }
+    .dot-ok       { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.6); }
+    .dot-loading  { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.5); }
+    .dot-error    { background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,0.5); }
+
+    /* ── Cesium info-box override (dark theme) ───── */
+    .cesium-infoBox {
+      background: rgba(12,12,20,0.92) !important;
+      border: 1px solid rgba(255,255,255,0.08) !important;
+      backdrop-filter: blur(12px);
+    }
+    .cesium-infoBox-title {
+      color: #e8e8e8 !important;
+      font-family: -apple-system, system-ui, sans-serif !important;
+      font-size: 14px !important;
+    }
+    .cesium-infoBox-close {
+      filter: invert(0.9) !important;
+    }
+
+    /* Hide widgets we don't need */
+    .cesium-viewer-geocoderContainer,
+    .cesium-viewer-toolbar { display: none !important; }
   </style>
 </head>
 <body>
-  <div id="cesiumContainer"></div>
-  <div id="panel">
-    <div id="hud">Loading…</div>
-    <select id="country"><option value="__ALL__">All countries</option></select>
-    <div>
-      <label><input type="checkbox" id="chkAir" checked> Air</label>
-      <label><input type="checkbox" id="chkGnd" checked> Ground</label>
-      <label><input type="checkbox" id="chkSurf" checked> Surface</label>
-      <label><input type="checkbox" id="chkTrail" checked> Trails</label>
-      <label><input type="checkbox" id="chkGrid"> ⚡Grid</label>
+
+  <!-- Loading screen -->
+  <div id="loading">
+    <h1>Overwatch</h1>
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Status HUD -->
+  <div id="hud">
+    <div class="hud-brand">Overwatch</div>
+    <div class="hud-right">
+      <span id="ac-count">&mdash;</span>
+      <span class="dot dot-loading" id="dot"></span>
     </div>
   </div>
-  <div id="btns">
-    <button id="btnLoc" title="My location">📍</button>
-    <button id="btnHome" title="Whole globe">🌐</button>
-    <button id="btnSet" title="Settings">⚙️</button>
-  </div>
-  <div id="settings">
-    <h4>Color aircraft by</h4>
-    <select id="colorMode">
-      <option value="class">Class (editable)</option>
-      <option value="country">Country (auto)</option>
-      <option value="single">Single color</option>
-    </select>
-    <div id="swatches"></div>
-  </div>
-  <div id="sheet"></div>
-  <div id="ginfo"></div>
-  <div id="err"></div>
+
+  <!-- Cesium viewport -->
+  <div id="cesiumContainer"></div>
+
   <script>
-    const WORKER = "https://overwatch.tassinjp.workers.dev";
-    const RANGES_URL = "ranges.json";
+  (async function () {
+    "use strict";
 
-    function showErr(msg){var e=document.getElementById("err");e.textContent="ERROR: "+msg;e.style.display="block";}
-    function hideErr(){document.getElementById("err").style.display="none";}
-    window.onerror=function(m,src,line,col,error){showErr((error&&error.message)?error.message:m);};
+    /* ═══════════════════════════════════════════════
+       CONFIG
+       ═══════════════════════════════════════════════ */
+    const ION_TOKEN  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IlJ5X2xoemp0YVVQbkk0eGgiLCJqdGkiOiIxNDZjZTU3Ny1mYmI3LTRjMzMtYTQwNC1hZWFjZDY3MTBhZjUiLCJpZCI6NTQyNTA4LCJzdWIiOiJ0YXNzaW5qcCIsImlzcyI6Imh0dHBzOi8vYXBpLmNlc2l1bS5jb20iLCJhdWQiOiJodHRwczovL3Rhc3NpbmpwLmdpdGh1Yi5pby8iLCJpYXQiOjE3OTM3OTc4MTl9.2LdhSKqWqxfqu6bXEJzGZroxoFIcVEcJfyrW9WEujDE";
+    const WORKER     = "https://overwatch.tassinjp.workers.dev";
+    const REFRESH_MS = 15000;   // 15-second aircraft refresh
+    const FT_TO_M    = 0.3048;
+    const DEFAULT_ALT_M = 3000; // fallback when alt_baro missing
 
-    // ---- color settings (persisted) ----
-    const CLASS_LIST = ["cargo","tanker","fighter","stealth","bomber","recon","helo","trainer","generic"];
-    const DEFAULT_PALETTE = { cargo:"#4caf50", tanker:"#2196f3", fighter:"#f44336", stealth:"#9c27b0",
-      bomber:"#ff5722", recon:"#00bcd4", helo:"#ffeb3b", trainer:"#ff9800", generic:"#e0e0e0" };
-    let colorMode="class", palette={...DEFAULT_PALETTE}, singleColor="#ffdd00";
-    try { const s=JSON.parse(localStorage.getItem("ow_colors")||"{}");
-      if(s.mode)colorMode=s.mode; if(s.palette)palette={...DEFAULT_PALETTE,...s.palette}; if(s.single)singleColor=s.single; } catch(e){}
-    function saveColors(){ try{ localStorage.setItem("ow_colors",JSON.stringify({mode:colorMode,palette,single:singleColor})); }catch(e){} }
+    /* ═══════════════════════════════════════════════
+       DOM refs
+       ═══════════════════════════════════════════════ */
+    const $loading = document.getElementById("loading");
+    const $hud     = document.getElementById("hud");
+    const $count   = document.getElementById("ac-count");
+    const $dot     = document.getElementById("dot");
 
-    Cesium.Ion.defaultAccessToken = "";
+    /* ═══════════════════════════════════════════════
+       AIRCRAFT ICON  (top-down planform, gold)
+       Pointing UP = 0° heading = north
+       ═══════════════════════════════════════════════ */
+    const PLANE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+      <path d="M16 3 L14.2 13 L3.5 17.8 L3.5 19.6 L14.2 16.8
+               L14.2 25.8 L10.5 28 L10.5 29.5 L16 27.2 L21.5 29.5
+               L21.5 28 L17.8 25.8 L17.8 16.8 L28.5 19.6 L28.5 17.8
+               L17.8 13 Z"
+            fill="#FFCC00" stroke="rgba(0,0,0,0.45)" stroke-width="0.6"
+            stroke-linejoin="round"/>
+    </svg>`;
+    const planeIcon = "data:image/svg+xml," + encodeURIComponent(PLANE_SVG);
+
+    /* ═══════════════════════════════════════════════
+       INIT CESIUM
+       ═══════════════════════════════════════════════ */
+    Cesium.Ion.defaultAccessToken = ION_TOKEN;
+
     const viewer = new Cesium.Viewer("cesiumContainer", {
-      baseLayer: new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
-        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        maximumLevel: 19, credit: "Esri" })),
-      baseLayerPicker:false, geocoder:false, homeButton:false, sceneModePicker:true,
-      navigationHelpButton:false, animation:false, timeline:false, fullscreenButton:false,
-      infoBox:false, selectionIndicator:false
+      globe: false,                        // Google 3D tiles replace the globe
+      skyAtmosphere: false,                // no atmo haze without a globe
+      animation: false,
+      timeline: false,
+      homeButton: false,
+      sceneModePicker: false,
+      baseLayerPicker: false,
+      navigationHelpButton: false,
+      fullscreenButton: false,
+      selectionIndicator: true,
+      infoBox: true,
+      shadows: false,
+      msaaSamples: 2,
+      useBrowserRecommendedResolution: true,
+      orderIndependentTranslucency: false,
+      contextOptions: {
+        webgl: { antialias: true, powerPreference: "high-performance" }
+      }
     });
-    const HOME = Cesium.Cartesian3.fromDegrees(-70.0, 30.0, 16000000);
-    viewer.camera.flyTo({ destination: HOME, duration: 0 });
 
-    function svg(inner){ return "data:image/svg+xml;utf8," + encodeURIComponent(
-      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" + inner + "</svg>"); }
-    const P = {
-      generic: svg("<path fill='white' d='M12 1 L13.4 9 L22 13.5 L22 15.5 L13.4 12.6 L12.7 19.5 L15.5 21.5 L15.5 22.8 L12 21.2 L8.5 22.8 L8.5 21.5 L11.3 19.5 L10.6 12.6 L2 15.5 L2 13.5 L10.6 9 Z'/>"),
-      cargo: svg("<path fill='white' d='M12 2 L13 9 L23 14 L23 15.6 L13 13 L12.6 19 L15 21 L15 22.2 L12 21 L9 22.2 L9 21 L11.4 19 L11 13 L1 15.6 L1 14 L11 9 Z'/>"),
-      tanker: svg("<path fill='white' d='M12 1 L13.4 9 L22 13.5 L22 15.5 L13.4 12.6 L12.7 19.5 L15.5 21.5 L15.5 22.8 L12 21.2 L8.5 22.8 L8.5 21.5 L11.3 19.5 L10.6 12.6 L2 15.5 L2 13.5 L10.6 9 Z'/><line x1='12' y1='21' x2='12' y2='23.6' stroke='white' stroke-width='1.6'/>"),
-      fighter: svg("<path fill='white' d='M12 2 L14 14 L20 20 L12 17 L4 20 L10 14 Z'/>"),
-      stealth: svg("<path fill='white' d='M12 4 L22 19 L12 15 L2 19 Z'/>"),
-      bomber: svg("<path fill='white' d='M12 2 L13 11 L23 20 L23 21 L12 16 L1 21 L1 20 L11 11 Z'/>"),
-      recon: svg("<path fill='white' d='M12 2 L13.4 9 L22 13.5 L22 15.5 L13.4 12.6 L12.7 19.5 L15.5 21.5 L15.5 22.8 L12 21.2 L8.5 22.8 L8.5 21.5 L11.3 19.5 L10.6 12.6 L2 15.5 L2 13.5 L10.6 9 Z'/><circle cx='12' cy='11' r='2.3' fill='none' stroke='white' stroke-width='1.3'/>"),
-      helo: svg("<g stroke='white' stroke-width='1.5' fill='none'><line x1='3' y1='7' x2='21' y2='17'/><line x1='21' y1='7' x2='3' y2='17'/></g><rect x='10' y='8' width='4' height='9' rx='2' fill='white'/><line x1='12' y1='17' x2='12' y2='22.5' stroke='white' stroke-width='1.5'/>"),
-      trainer: svg("<path fill='white' d='M12 5 L13 10 L19 13 L19 14.5 L13 12.5 L12.7 18 L15 19.5 L15 20.5 L12 19.3 L9 20.5 L9 19.5 L11.3 18 L11 12.5 L5 14.5 L5 13 L11 10 Z'/>")
-    };
-    const SET = {
-      tanker:["K35R","KC46","KC10","KC2","KC30","A332","KC3","VC10","A310"],
-      recon:["R135","RC135","E3","E3TF","E3CF","E6","E7","E8","P8","P3","P1","U2","RQ4","GLF5","GL5T","RC12","E767"],
-      bomber:["B1","B52","B21"], stealth:["B2"],
-      fighter:["EUFI","RFAL","F15","F16","F18","FA18","F22","F35","F14","TOR","GR4","JAS39","A10","AV8B","MIG29","SU27","SU30","J10","JH7","HAWK"],
-      helo:["EC35","EC45","H60","A139","V22","EC75","H47","CH47","H64","H160","UH1","MI8","MI17","NH90","AS32","PUMA","EC30","A109","H500","B06"],
-      cargo:["C130","C30J","C17","C5","C5M","C295","C27J","C160","A400","AN32","AN12","AN26","IL76","C2","D228","C40","C32","B744","B742","B752","B762","B77W","B737","A320","A330","AT76","F50","C12","DHC6","DH8"],
-      trainer:["PC21","PC7","TEX2","T6","T38","CT4","DA40","PC9","T45","G120","SF26"]
-    };
-    const TYPE2CAT={}; for(const c in SET) for(const t of SET[c]) TYPE2CAT[t]=c;
-    function classify(a){ const t=(a.t||"").toUpperCase();
-      if(TYPE2CAT[t]) return TYPE2CAT[t];
-      if(a.category&&String(a.category).toUpperCase()==="A7") return "helo"; return "generic"; }
-    function flagEmoji(cc){ if(!cc||cc.length!==2) return "";
-      const A=0x1F1E6; return String.fromCodePoint(A+cc.charCodeAt(0)-65)+String.fromCodePoint(A+cc.charCodeAt(1)-65); }
-    function hslColor(h){ const s=0.85,l=0.58,c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2; let r,g,b;
-      if(h<60){r=c;g=x;b=0;}else if(h<120){r=x;g=c;b=0;}else if(h<180){r=0;g=c;b=x;}
-      else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
-      return new Cesium.Color(r+m,g+m,b+m,1.0); }
+    /* Faster touch, no look-around (confusing on mobile) */
+    const ssc = viewer.scene.screenSpaceCameraController;
+    ssc.enableTilt   = true;
+    ssc.enableLook   = false;
+    ssc.minimumZoomDistance = 250;   // don't clip into terrain
 
-    const COUNTRY=new Map();
-    const SURF_COLOR=Cesium.Color.fromCssColorString("#00e5ff");
-    function colorFor(rec){
-      if(rec.kind==="surface") return SURF_COLOR;
-      if(colorMode==="single") return Cesium.Color.fromCssColorString(singleColor);
-      if(colorMode==="country"){ const r=COUNTRY.get(rec.ctry); return (r&&r.color)||Cesium.Color.GRAY; }
-      return Cesium.Color.fromCssColorString(palette[rec.cat]||palette.generic);
+    /* ═══════════════════════════════════════════════
+       GOOGLE PHOTOREALISTIC 3D TILES
+       ═══════════════════════════════════════════════ */
+    try {
+      const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+      viewer.scene.primitives.add(tileset);
+    } catch (err) {
+      console.error("Failed to load Google 3D Tiles:", err);
+      $loading.innerHTML =
+        `<h1 style="margin-bottom:14px">Overwatch</h1>
+         <p style="color:#f87171;font-size:13px;max-width:280px;text-align:center;line-height:1.5;">
+           Failed to load 3D tiles.<br>
+           Check that Google Photorealistic 3D Tiles is added in your
+           <a href="https://ion.cesium.com/assets" style="color:#93c5fd" target="_blank">Cesium ion assets</a>
+           and that your token is valid.
+         </p>`;
+      return;
     }
 
-    async function loadCountries(){
-      try{
-        const r=await fetch(RANGES_URL,{cache:"force-cache"}); const rows=await r.json();
-        const uniq=new Map();
-        for(const row of rows){ const name=row[2]; if(!uniq.has(name)) uniq.set(name,{cc:row[3]||"",lat:row[4],lon:row[5]}); }
-        const names=[...uniq.keys()].sort();
-        names.forEach((name,i)=>{ const u=uniq.get(name);
-          COUNTRY.set(name,{cc:u.cc,lat:u.lat,lon:u.lon,color:hslColor((i*137.508)%360)}); });
-        const sel=document.getElementById("country");
-        sel.innerHTML='<option value="__ALL__">All countries</option>';
-        for(const name of names){ if(name.startsWith("Unassigned")||name.startsWith("ICAO")) continue;
-          const o=document.createElement("option"); o.value=name;
-          const f=flagEmoji(uniq.get(name).cc); o.textContent=(f?f+" ":"")+name; sel.appendChild(o); }
-      }catch(e){}
+    /* ═══════════════════════════════════════════════
+       CAMERA  — start high, fly down to CONUS
+       ═══════════════════════════════════════════════ */
+    // Instant jump to starting altitude
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(-98, 39, 18000000),
+      orientation: {
+        heading: 0,
+        pitch: Cesium.Math.toRadians(-90),
+        roll: 0
+      }
+    });
+
+    // After a beat, smooth fly-in
+    setTimeout(() => {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(-98, 39, 4800000),
+        orientation: {
+          heading: 0,
+          pitch: Cesium.Math.toRadians(-90),
+          roll: 0
+        },
+        duration: 3.5,
+        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT
+      });
+    }, 800);
+
+    /* ═══════════════════════════════════════════════
+       DISMISS LOADING after first meaningful render
+       ═══════════════════════════════════════════════ */
+    let loadDismissed = false;
+    function dismissLoading() {
+      if (loadDismissed) return;
+      loadDismissed = true;
+      $loading.classList.add("hidden");
+      $hud.classList.add("visible");
+      viewer.scene.postRender.removeEventListener(dismissLoading);
+    }
+    viewer.scene.postRender.addEventListener(dismissLoading);
+    // Safety fallback: if postRender never fires (unlikely), dismiss after 4s
+    setTimeout(dismissLoading, 4000);
+
+    /* ═══════════════════════════════════════════════
+       AIRCRAFT LAYER
+       ═══════════════════════════════════════════════ */
+    const planes = new Map();   // hex → Entity
+
+    function setDot(cls) {
+      $dot.className = "dot dot-" + cls;
     }
 
-    const assets=new Map();
-    const LABEL_DDC=new Cesium.DistanceDisplayCondition(0.0, 1.8e6); // labels only when zoomed in
-    function isSurface(a){ return a.category&&String(a.category)[0]==="C"; }
-    function currentCartesian(rec){
-      const spd=(rec.gs||0)*0.514444,dt=(Date.now()-rec.t0)/1000,dist=spd*dt;
-      if(dist<1) return Cesium.Cartesian3.fromDegrees(rec.lon0,rec.lat0,rec.altM);
-      const R=6378137,brng=Cesium.Math.toRadians(rec.track||0);
-      const lat1=Cesium.Math.toRadians(rec.lat0),lon1=Cesium.Math.toRadians(rec.lon0),dR=dist/R;
-      const lat2=Math.asin(Math.sin(lat1)*Math.cos(dR)+Math.cos(lat1)*Math.sin(dR)*Math.cos(brng));
-      const lon2=lon1+Math.atan2(Math.sin(brng)*Math.sin(dR)*Math.cos(lat1),Math.cos(dR)-Math.sin(lat1)*Math.sin(lat2));
-      return Cesium.Cartesian3.fromRadians(lon2,lat2,rec.altM); }
-    function mkLabel(text,dy){ return { text, font:"bold 13px -apple-system,sans-serif", fillColor:Cesium.Color.WHITE,
-      showBackground:true, backgroundColor:new Cesium.Color(0,0,0,0.6), backgroundPadding:new Cesium.Cartesian2(5,3),
-      style:Cesium.LabelStyle.FILL, pixelOffset:new Cesium.Cartesian2(0,dy), scale:1.0,
-      distanceDisplayCondition:LABEL_DDC, disableDepthTestDistance:Number.POSITIVE_INFINITY,
-      horizontalOrigin:Cesium.HorizontalOrigin.LEFT }; }
+    function descriptionHtml(a) {
+      const callsign = (a.flight || "").trim() || "—";
+      const type     = a.t || "—";
+      const reg      = a.r || "—";
+      const alt      = typeof a.alt_baro === "number"
+                         ? a.alt_baro.toLocaleString() + " ft" : "Ground";
+      const spd      = typeof a.gs === "number"
+                         ? Math.round(a.gs) + " kts" : "—";
+      const hdg      = typeof a.track === "number"
+                         ? Math.round(a.track) + "°" : "—";
+      const squawk   = a.squawk || "—";
 
-    async function updateAircraft(){
-      try{
-        const res=await fetch(WORKER+"/air",{cache:"no-store"}); const data=await res.json();
-        const list=data.ac||[]; const seen=new Set();
-        for(const a of list){
-          let lat=(typeof a.lat==="number")?a.lat:(a.lastPosition&&a.lastPosition.lat);
-          let lon=(typeof a.lon==="number")?a.lon:(a.lastPosition&&a.lastPosition.lon);
-          if(typeof lat!=="number"||typeof lon!=="number") continue;
-          const hex=a.hex; seen.add(hex);
-          const onGround=(a.alt_baro==="ground");
-          const kind=isSurface(a)?"surface":(onGround?"ground":"air");
-          const cat=isSurface(a)?"surface":classify(a);
-          const ctry=a.ctry||"Unknown";
-          const altFt=(a.alt_baro==="ground"||a.alt_baro==null)?0:a.alt_baro;
-          const altM=Math.max(altFt*0.3048,60);
-          const call=(a.flight||"").trim()||hex.toUpperCase();
-          const text=call+(a.t?("  "+a.t):"")+(onGround?"  (GND)":"");
+      return `<div style="font-family:-apple-system,system-ui,sans-serif;
+                          font-size:13px;color:#ccc;line-height:1.7;">
+        <table style="border-collapse:collapse;width:100%;">
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Callsign</td><td style="font-weight:600;color:#eee;">${callsign}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Type</td><td>${type}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Registration</td><td>${reg}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Altitude</td><td>${alt}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Speed</td><td>${spd}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Heading</td><td>${hdg}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">Squawk</td><td>${squawk}</td></tr>
+          <tr><td style="color:#888;padding:2px 10px 2px 0;">ICAO Hex</td><td style="font-family:menlo,monospace;font-size:12px;">${(a.hex || "").toUpperCase()}</td></tr>
+        </table>
+      </div>`;
+    }
 
-          let rec=assets.get(hex);
-          if(!rec||rec.kind!==kind||rec.cat!==cat){
-            if(rec){viewer.entities.remove(rec.entity); if(rec.trail)viewer.entities.remove(rec.trail);}
-            rec={ctry,kind,cat,lat0:lat,lon0:lon,altM,track:a.track||0,gs:onGround?0:(a.gs||0),t0:Date.now(),hist:[],info:{}};
-            const posProp=new Cesium.CallbackProperty(()=>currentCartesian(rec),false);
-            if(kind==="surface"){
-              rec.entity=viewer.entities.add({position:posProp,
-                point:{pixelSize:7,color:SURF_COLOR,outlineColor:Cesium.Color.BLACK,outlineWidth:1},label:mkLabel(text,-13)});
-            } else {
-              rec.entity=viewer.entities.add({position:posProp,
-                billboard:{image:P[cat]||P.generic, scale:0.95, color:colorFor(rec),
-                  translucencyByDistance:new Cesium.NearFarScalar(2e6,(kind==="ground"?0.6:1.0),1.4e7,(kind==="ground"?0.4:0.9)),
-                  rotation:new Cesium.CallbackProperty(()=>Cesium.Math.toRadians(-(rec.track||0)),false),
-                  alignedAxis:Cesium.Cartesian3.ZERO},
-                label:mkLabel(text,-16)});
-              if(kind==="air"){ rec.trail=viewer.entities.add({polyline:{
-                positions:new Cesium.CallbackProperty(()=>rec.hist,false), width:1.6,
-                material:new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(()=>colorFor(rec).withAlpha(0.55),false))}}); }
-            }
-            rec.entity._hex=hex; if(rec.trail)rec.trail._hex=hex;
-            assets.set(hex,rec);
-          } else {
-            rec.ctry=ctry; rec.lat0=lat; rec.lon0=lon; rec.altM=altM;
-            rec.track=a.track||rec.track; rec.gs=onGround?0:(a.gs||0); rec.t0=Date.now();
-            rec.entity.label.text=text;
+    async function refreshAircraft() {
+      setDot("loading");
+      try {
+        const res = await fetch(WORKER + "/air");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        const ac = data.ac || [];
+
+        const seen = new Set();
+
+        for (const a of ac) {
+          if (a.lat == null || a.lon == null) continue;
+          const hex = a.hex;
+          seen.add(hex);
+
+          // Altitude in metres; ground → 200 m so icon sits above terrain mesh
+          let altM = DEFAULT_ALT_M;
+          if (typeof a.alt_baro === "number") {
+            altM = a.alt_baro * FT_TO_M;
+            if (altM < 150) altM = 150;  // keep above ground-level tiles
           }
-          if(rec.entity.billboard) rec.entity.billboard.color=colorFor(rec);
-          const cc=(COUNTRY.get(ctry)||{}).cc||"";
-          rec.info={call,type:(a.t||"—"),reg:(a.r||""),cat,ctry,cc,altFt,gs:Math.round(a.gs||0),
-                    track:Math.round(a.track||0),hex:hex.toUpperCase(),squawk:a.squawk||"—",onGround,lat,lon};
-          if(kind==="air"){ rec.hist.push(Cesium.Cartesian3.fromDegrees(lon,lat,altM)); if(rec.hist.length>12)rec.hist.shift(); }
+
+          const position = Cesium.Cartesian3.fromDegrees(a.lon, a.lat, altM);
+          const heading  = typeof a.track === "number"
+                             ? -Cesium.Math.toRadians(a.track) : 0;
+          const callsign = (a.flight || "").trim();
+          const label    = callsign || hex.toUpperCase();
+
+          if (planes.has(hex)) {
+            /* ── Update existing entity ── */
+            const e = planes.get(hex);
+            e.position  = new Cesium.ConstantPositionProperty(position);
+            e.billboard.rotation = heading;
+            e.label.text = label;
+            e.name = label;
+            e.description = descriptionHtml(a);
+          } else {
+            /* ── Create new entity ── */
+            const e = viewer.entities.add({
+              id: hex,
+              position: position,
+              billboard: {
+                image: planeIcon,
+                width: 20,
+                height: 20,
+                rotation: heading,
+                alignedAxis: Cesium.Cartesian3.ZERO,  // screen-space
+                verticalOrigin: Cesium.VerticalOrigin.CENTER,
+                horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                translucencyByDistance: new Cesium.NearFarScalar(
+                  100, 1.0, 20000000, 0.65
+                )
+              },
+              label: {
+                text: label,
+                font: "600 10.5px -apple-system, system-ui, sans-serif",
+                fillColor: Cesium.Color.WHITE,
+                outlineColor: new Cesium.Color(0, 0, 0, 0.7),
+                outlineWidth: 2.5,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                pixelOffset: new Cesium.Cartesian2(0, -17),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                showBackground: false,
+                scale: 1.0,
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+                  0, 8000000
+                )
+              },
+              name: label,
+              description: descriptionHtml(a)
+            });
+            planes.set(hex, e);
+          }
         }
-        for(const [hex,rec] of assets){ if(!seen.has(hex)){viewer.entities.remove(rec.entity);
-          if(rec.trail)viewer.entities.remove(rec.trail); assets.delete(hex);} }
-        // refresh open sheet
-        if(openHex && assets.has(openHex)) fillSheet(assets.get(openHex), false);
-        applyFilter(); hideErr();
-      }catch(err){ showErr("aircraft: "+err.message); }
-    }
 
-    function recolorAll(){ for(const rec of assets.values()){ if(rec.entity.billboard) rec.entity.billboard.color=colorFor(rec); } }
+        /* ── Remove aircraft no longer in feed ── */
+        for (const [hex, entity] of planes) {
+          if (!seen.has(hex)) {
+            viewer.entities.remove(entity);
+            planes.delete(hex);
+          }
+        }
 
-    function applyFilter(){
-      const sel=document.getElementById("country").value;
-      const showAir=document.getElementById("chkAir").checked, showGnd=document.getElementById("chkGnd").checked;
-      const showSurf=document.getElementById("chkSurf").checked, showTrail=document.getElementById("chkTrail").checked;
-      let air=0,gnd=0,surf=0,shown=0;
-      for(const rec of assets.values()){
-        let kindOk=rec.kind==="ground"?showGnd:rec.kind==="surface"?showSurf:showAir;
-        const ctryOk=sel==="__ALL__"||rec.ctry===sel; const vis=kindOk&&ctryOk;
-        rec.entity.show=vis; if(rec.trail)rec.trail.show=vis&&showTrail;
-        if(rec.kind==="ground")gnd++; else if(rec.kind==="surface")surf++; else air++; if(vis)shown++;
+        $count.textContent = seen.size + " aircraft";
+        setDot("ok");
+
+      } catch (err) {
+        console.error("Aircraft refresh failed:", err);
+        setDot("error");
       }
-      document.getElementById("hud").textContent="Air "+air+" · Gnd "+gnd+" · Surf "+surf+" · shown "+shown;
     }
 
-    // ---- bottom sheet ----
-    const sheet=document.getElementById("sheet");
-    let openHex=null; const photoCache=new Map();
-    function closeSheet(){ sheet.classList.remove("open"); openHex=null; viewer.trackedEntity=undefined; }
-    function fillSheet(rec, animate){
-      const i=rec.info; openHex=i.hex.toLowerCase(); const f=flagEmoji(i.cc);
-      const fr24 = "https://www.flightradar24.com/data/aircraft/" + (i.reg||i.hex).toLowerCase().replace(/[^a-z0-9-]/g,"");
-      const tracking = (viewer.trackedEntity===rec.entity);
-      sheet.innerHTML =
-        '<div class="head"><div><span class="call">'+i.call+'</span>'+(i.type!=="—"?'<span class="badge">'+i.type+'</span>':'')+
-          '<div class="sub">'+(f?f+' ':'')+i.ctry+(i.reg?' · '+i.reg:'')+' · '+i.cat+(i.onGround?' · on ground':'')+'</div></div>'+
-          '<span class="x" onclick="window.__close()">✕</span></div>'+
-        '<img class="photo" id="acphoto" alt="" style="display:none">'+
-        '<div class="grid">'+
-          '<div><div class="k">Altitude</div><div class="v">'+(i.altFt?i.altFt.toLocaleString()+" ft":"ground")+'</div></div>'+
-          '<div><div class="k">Ground speed</div><div class="v">'+i.gs+' kt</div></div>'+
-          '<div><div class="k">Heading</div><div class="v">'+i.track+'°</div></div>'+
-          '<div><div class="k">Squawk</div><div class="v">'+i.squawk+'</div></div>'+
-          '<div><div class="k">ICAO hex</div><div class="v">'+i.hex+'</div></div>'+
-          '<div><div class="k">Position</div><div class="v">'+i.lat.toFixed(3)+", "+i.lon.toFixed(3)+'</div></div>'+
-        '</div>'+
-        '<div class="acts">'+
-          '<button onclick="window.__follow()">'+(tracking?"Stop follow":"Follow / 3D")+'</button>'+
-          '<a class="sec" href="'+fr24+'" target="_blank" rel="noopener">History (FR24)</a>'+
-        '</div>'+
-        '<div class="credit" id="accredit"></div>';
-      if(animate) sheet.classList.add("open");
-      loadPhoto(i.hex);
-    }
-    async function loadPhoto(hex){
-      const img=document.getElementById("acphoto"), cr=document.getElementById("accredit");
-      if(!img) return;
-      try{
-        let p=photoCache.get(hex);
-        if(!p){ const r=await fetch(WORKER+"/photo?hex="+hex); const j=await r.json(); p=(j.photos&&j.photos[0])||null; photoCache.set(hex,p); }
-        if(p && openHex===hex.toLowerCase()){
-          img.src=p.thumbnail_large?p.thumbnail_large.src:p.thumbnail.src; img.style.display="block";
-          if(cr) cr.innerHTML='Photo © '+(p.photographer||"")+' · <a style="color:#9ad" href="'+p.link+'" target="_blank" rel="noopener">Planespotters</a>';
-        }
-      }catch(e){}
-    }
-    window.__close=closeSheet;
-    window.__follow=function(){ const rec=assets.get(openHex); if(!rec) return;
-      if(viewer.trackedEntity===rec.entity){ viewer.trackedEntity=undefined; } else { viewer.trackedEntity=rec.entity; }
-      fillSheet(rec,true); };
+    /* First fetch, then schedule recurring */
+    await refreshAircraft();
+    setInterval(refreshAircraft, REFRESH_MS);
 
-    const handler=new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((click)=>{
-      const picks=viewer.scene.drillPick(click.position) || [];
-      for(const pk of picks){ if(pk&&pk.id&&pk.id._hex){ const rec=assets.get(pk.id._hex); if(rec){ fillSheet(rec,true); return; } } }
-      // grid region by geographic point (works in 2D and 3D)
-      if(document.getElementById("chkGrid").checked){
-        const cart=viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
-        if(cart){ const c=Cesium.Cartographic.fromCartesian(cart);
-          const lon=Cesium.Math.toDegrees(c.longitude), lat=Cesium.Math.toDegrees(c.latitude);
-          const reg=gridFeatures?regionAt(lon,lat):null;
-          if(reg){ showGridInfo(reg); return; }
-          const gi=document.getElementById("ginfo");
-          gi.innerHTML='<span class="x" onclick="window.__gclose()">\u2715</span>tap '+lat.toFixed(2)+', '+lon.toFixed(2)+'<br>region: none<br>shapes loaded: '+(gridFeatures?gridFeatures.length:'NO');
-          gi.style.display="block"; return;
-        }
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-    function ptInRing(lon,lat,ring){ let inside=false;
-      for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
-        if(((yi>lat)!==(yj>lat))&&(lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
-    function ptInPoly(lon,lat,rings){ if(!ptInRing(lon,lat,rings[0])) return false;
-      for(let k=1;k<rings.length;k++) if(ptInRing(lon,lat,rings[k])) return false; return true; }
-    function regionAt(lon,lat){ if(!gridFeatures) return null;
-      for(const f of gridFeatures){ const g=f.geometry;
-        if(g.type==="Polygon"){ if(ptInPoly(lon,lat,g.coordinates)) return f.properties.region; }
-        else if(g.type==="MultiPolygon"){ for(const poly of g.coordinates){ if(ptInPoly(lon,lat,poly)) return f.properties.region; } } }
-      return null; }
-    // grid region fuel-mix panel
-    const FUEL={NUC:["Nuclear","#f5d442"],NG:["Natural gas","#ef7d3b"],COL:["Coal","#8b7355"],
-      WAT:["Hydro","#3b9cff"],WND:["Wind","#35d0a5"],SUN:["Solar","#ffe14d"],OIL:["Oil","#b05a5a"],
-      OTH:["Other","#9aa0a6"],BAT:["Battery","#a06cff"]};
-    let openRegion=null;
-    const REGION_NAMES={CAL:"California",CAR:"Carolinas",CENT:"Central (SPP)",FLA:"Florida",MIDA:"Mid-Atlantic (PJM)",MIDW:"Midwest (MISO)",NE:"New England",NW:"Northwest",NY:"New York",SE:"Southeast",SW:"Southwest",TEN:"Tennessee",TEX:"Texas (ERCOT)"};
-    function showGridInfo(code){
-      const gi=document.getElementById("ginfo");
-      const g=gridStatus[code]||{name:REGION_NAMES[code]||code,demand:null,status:"loading",mix:{}};
-      openRegion=code;
-      const mix=g.mix||{}; const entries=Object.keys(mix).map(k=>[k,mix[k]]).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
-      const total=entries.reduce((s,e)=>s+e[1],0)||1;
-      let rows="";
-      for(const [ft,v] of entries){ const meta=FUEL[ft]||[ft,"#888"]; const pct=Math.round(v/total*100);
-        rows+='<div class="frow"><div class="fname">'+meta[0]+'</div>'+
-          '<div class="fbar"><div style="width:'+pct+'%;background:'+meta[1]+'"></div></div>'+
-          '<div class="fval">'+pct+'%</div></div>'; }
-      gi.innerHTML='<span class="x" onclick="window.__gclose()">✕</span>'+
-        '<h4>'+g.name+'</h4><div class="sub">Demand '+g.demand.toLocaleString()+' MW · '+g.status+'</div>'+
-        (rows||'<div style="color:#999">No fuel data</div>')+
-        '<div style="color:#789;font-size:10px;margin-top:6px">Generation by fuel · live</div>';
-      gi.style.display="block";
-    }
-    window.__gclose=function(){ document.getElementById("ginfo").style.display="none"; openRegion=null; };
-
-    // ---- settings panel ----
-    function buildSwatches(){
-      const box=document.getElementById("swatches"); box.innerHTML="";
-      document.getElementById("colorMode").value=colorMode;
-      if(colorMode==="class"){
-        for(const c of CLASS_LIST){ const row=document.createElement("div"); row.className="sw";
-          row.innerHTML='<span>'+c+'</span>';
-          const inp=document.createElement("input"); inp.type="color"; inp.value=palette[c];
-          inp.addEventListener("input",()=>{ palette[c]=inp.value; saveColors(); recolorAll(); });
-          row.appendChild(inp); box.appendChild(row); }
-      } else if(colorMode==="single"){
-        const row=document.createElement("div"); row.className="sw"; row.innerHTML='<span>All aircraft</span>';
-        const inp=document.createElement("input"); inp.type="color"; inp.value=singleColor;
-        inp.addEventListener("input",()=>{ singleColor=inp.value; saveColors(); recolorAll(); });
-        row.appendChild(inp); box.appendChild(row);
-      } else { box.innerHTML='<div style="color:#aaa">Each country auto-colored.</div>'; }
-    }
-    document.getElementById("colorMode").addEventListener("change",(e)=>{ colorMode=e.target.value; saveColors(); buildSwatches(); recolorAll(); });
-    document.getElementById("btnSet").addEventListener("click",()=>{ const s=document.getElementById("settings");
-      s.style.display = s.style.display==="none"||!s.style.display ? "block":"none"; buildSwatches(); });
-
-    // ---- controls ----
-    document.getElementById("country").addEventListener("change",(e)=>{ applyFilter();
-      const name=e.target.value; if(name!=="__ALL__"){ const c=COUNTRY.get(name);
-        if(c&&typeof c.lat==="number") viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(c.lon,c.lat,3500000),duration:1.2}); } });
-    ["chkAir","chkGnd","chkSurf","chkTrail"].forEach(id=>document.getElementById(id).addEventListener("change",applyFilter));
-    document.getElementById("btnHome").addEventListener("click",()=>{ viewer.trackedEntity=undefined; viewer.camera.flyTo({destination:HOME,duration:1.0}); });
-    document.getElementById("btnLoc").addEventListener("click",()=>{
-      if(!navigator.geolocation){ showErr("geolocation not supported"); return; }
-      navigator.geolocation.getCurrentPosition(
-        (p)=>viewer.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(p.coords.longitude,p.coords.latitude,800000),duration:1.2}),
-        (e)=>showErr("Location blocked. Enable it: iPhone Settings → Apps → Safari → Location → Allow, then tap 📍 again. ("+e.message+")"),
-        {enableHighAccuracy:true,timeout:10000});
-    });
-    document.addEventListener("visibilitychange",()=>{ if(!document.hidden) updateAircraft(); });
-
-
-    // ---- Power grid layer (EIA): shaded state polygons by region status ----
-    const GRID_URL="eia-states.geojson";
-    let gridDS=null; const gridLabels=[]; let gridStatus={}; let gridFeatures=null;
-    const GRID_COLOR={green:Cesium.Color.fromCssColorString("#22c55e"),
-      yellow:Cesium.Color.fromCssColorString("#eab308"), red:Cesium.Color.fromCssColorString("#ef4444")};
-    async function ensureGridGeo(){
-      if(gridDS) return gridDS;
-      gridDS=await Cesium.GeoJsonDataSource.load(GRID_URL);
-      await viewer.dataSources.add(gridDS);
-      try{ const rr=await fetch(GRID_URL,{cache:"force-cache"}); gridFeatures=(await rr.json()).features||[]; }catch(e){}
-      for(const ent of gridDS.entities.values){ if(ent.polygon){
-        ent.polygon.height=0; ent.polygon.outline=true;
-        ent.polygon.outlineColor=Cesium.Color.BLACK.withAlpha(0.4);
-        ent.polygon.material=Cesium.Color.GRAY.withAlpha(0.15); } }
-      return gridDS;
-    }
-    function colorGridPolys(){
-      if(!gridDS) return;
-      for(const ent of gridDS.entities.values){ if(!ent.polygon) continue;
-        const reg=ent.properties&&ent.properties.region&&ent.properties.region.getValue();
-        const st=gridStatus[reg]; const col=st?(GRID_COLOR[st.status]||GRID_COLOR.green):Cesium.Color.GRAY;
-        ent.polygon.material=col.withAlpha(0.33); ent.polygon.outlineColor=col.withAlpha(0.9); }
-    }
-    function clearGridLabels(){ for(const e of gridLabels) viewer.entities.remove(e); gridLabels.length=0; }
-    async function updateGrid(){
-      if(!document.getElementById("chkGrid").checked){ if(gridDS)gridDS.show=false; clearGridLabels(); return; }
-      try{
-        await ensureGridGeo(); gridDS.show=true;
-        const r=await fetch(WORKER+"/grid",{cache:"no-store"}); const d=await r.json();
-        if(d.error){ showErr("grid: "+d.error); return; }
-        gridStatus={}; clearGridLabels();
-        for(const g of (d.regions||[])){
-          gridStatus[g.code]={status:g.status,demand:g.demand,name:g.name,mix:g.mix||{}};
-          gridLabels.push(viewer.entities.add({
-            position:Cesium.Cartesian3.fromDegrees(g.lon,g.lat),
-            label:{ text:g.name+"\n"+g.demand.toLocaleString()+" MW",
-              font:"bold 12px -apple-system,sans-serif", fillColor:Cesium.Color.WHITE,
-              showBackground:true, backgroundColor:new Cesium.Color(0,0,0,0.6),
-              backgroundPadding:new Cesium.Cartesian2(5,3), style:Cesium.LabelStyle.FILL,
-              distanceDisplayCondition:new Cesium.DistanceDisplayCondition(0.0,1.2e7),
-              disableDepthTestDistance:Number.POSITIVE_INFINITY }
-          }));
-        }
-        colorGridPolys(); if(openRegion) showGridInfo(openRegion); hideErr();
-      }catch(e){ showErr("grid: "+e.message); }
-    }
-    document.getElementById("chkGrid").addEventListener("change",updateGrid);
-
-    // preload grid region shapes so region taps work even before toggling Grid
-    fetch(GRID_URL,{cache:"force-cache"}).then(r=>r.json()).then(j=>{ gridFeatures=j.features||[]; }).catch(()=>{});
-    loadCountries().then(()=>{ updateAircraft(); setInterval(updateAircraft,15000); });
-    updateGrid(); setInterval(updateGrid, 600000); // grid every 10 min
+  })();
   </script>
 </body>
 </html>
